@@ -1,0 +1,529 @@
+/* ===== Global layout ===== */
+
+/* Make the app fill the full viewport height */
+html, body, #root {
+    height: 100%;
+    margin: 0;
+}
+
+/* SweetAlert2 adds height: auto to body when a popup opens; !important overrides it
+   so the page layout doesn't jump while the popup is shown */
+body.swal2-height-auto.swal2-shown {
+    height: 100% !important;
+}
+
+
+/* ===== Dashboard: container and header ===== */
+
+/* Centered content column */
+.panou-container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Title + action buttons on one row; wraps on narrow screens */
+.panou-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* flex: 1 pushes the buttons to the right edge */
+.panou-header-titlu {
+    flex: 1;
+    margin: 0;
+    font-size: 1.4rem;
+    color: #1a1a2e;
+}
+
+/* width: 100% forces the role text onto its own line below the title */
+.panou-header-rol {
+    width: 100%;
+    margin: 0;
+    color: rgb(93, 88, 98);
+    font-size: 0.95rem;
+}
+
+
+/* ===== Header buttons ===== */
+
+/* Red = destructive/exit action */
+.btn-logout {
+    padding: 5px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    background: #e53e3e;
+    color: #fff;
+    border: 1.5px solid #e53e3e;
+    font-size: 0.875rem;
+}
+
+.btn-logout:hover {
+    background: #c53030;
+    border-color: #c53030;
+}
+
+/* Neutral grey outline buttons (settings, switch role) */
+.btn-setari {
+    padding: 5px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1.5px solid #ccc;
+    background: #fff;
+    font-size: 0.875rem;
+}
+
+.btn-setari:hover {
+    background: #f0f0f0;
+}
+
+.btn-schimbare-rol {
+    padding: 5px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1.5px solid #ccc;
+    background: #fff;
+    font-size: 0.875rem;
+}
+
+.btn-schimbare-rol:hover {
+    background: #f0f0f0;
+}
+
+
+/* ===== Client dashboard: sections and titles ===== */
+
+.panou-client-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.panou-client-titlu {
+    font-size: 1.2rem;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+.panou-sectiune-titlu {
+    font-size: 1rem;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+
+/* ===== Add-project form ===== */
+
+/* Card that contains the whole form */
+.form-adaugare-proiect {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.5rem;
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+    background: #fff;
+}
+
+/* Label wraps its field; flex-wrap + flex-basis: 100% on the field
+   puts the input on its own line under the label text */
+.form-label {
+    display: flex;
+    flex-wrap: wrap;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: rgb(93, 88, 98);
+    gap: 4px;
+}
+
+.form-input {
+    margin-top: 0.25rem;
+    border: 1.5px solid #ccc;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    transition: border-color 0.15s ease;
+    flex-basis: 100%;
+}
+
+/* Blue border replaces the default browser outline on focus */
+.form-input:focus {
+    outline: none;
+    border-color: #558ee3;
+}
+
+.form-textarea {
+    margin-top: 0.25rem;
+    border: 1.5px solid #ccc;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    transition: border-color 0.15s ease;
+    resize: vertical;
+    flex-basis: 100%;
+}
+
+.form-textarea:focus {
+    outline: none;
+    border-color: #558ee3;
+}
+
+
+/* ===== Activities block (inside the add-project form) ===== */
+
+/* Light grey box that groups the activity inputs */
+.form-activități {
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: #fafafa;
+}
+
+.form-activitati-titlu {
+    margin: 0;
+    font-size: 1rem;
+    color: #1a1a2e;
+}
+
+.form-activitate {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Fields of one activity side by side; wrap when there isn't enough room */
+.form-activitate-rand {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+/* min-width: 140px so fields wrap instead of getting too narrow */
+.form-activitate-rand .form-label {
+    flex: 1;
+    min-width: 140px;
+}
+
+
+/* ===== List of added activities ===== */
+
+.lista-activitati-adauagate {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.lista-activitati-adauagate-titlu {
+    margin: 0;
+    font-size: 0.9rem;
+    color: rgb(93, 88, 98);
+}
+
+/* Remove default bullets */
+.lista-activitati-ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+/* One row: activity text on the left, delete button on the right */
+.activitate-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    font-size: 0.9rem;
+    gap: 0.5rem;
+}
+
+
+/* ===== Action buttons ===== */
+
+/* Main submit button: full width, solid blue */
+.btn-trimite {
+    width: 100%;
+    padding: 8px;
+    cursor: pointer;
+    background: #558ee3;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.btn-trimite:hover {
+    background: #285e9b;
+}
+
+/* Green = add; align-self: flex-start keeps the button at its natural width */
+.btn-adauga-activitate {
+    padding: 6px 12px;
+    cursor: pointer;
+    background: #38a169;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    align-self: flex-start;
+}
+
+.btn-adauga-activitate:hover {
+    background: #276749;
+}
+
+/* Small red outline button; white-space: nowrap keeps the label on one line */
+.btn-sterge-activitate {
+    padding: 3px 8px;
+    cursor: pointer;
+    background: transparent;
+    color: #e53e3e;
+    border: 1.5px solid #e53e3e;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.btn-sterge-activitate:hover {
+    background: #fff5f5;
+}
+
+/* Blue = positive action (release payment) */
+.btn-elibereaza {
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: none;
+    background: #558ee3;
+    color: #fff;
+    align-self: flex-start;
+}
+
+.btn-elibereaza:hover {
+    background: #285e9b;
+}
+
+/* Solid red = destructive/negative actions (dispute, delete project) */
+.btn-disputa {
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: none;
+    background: #e53e3e;
+    color: #fff;
+    align-self: flex-start;
+}
+
+.btn-disputa:hover {
+    background: #c53030;
+}
+
+.btn-sterge-proiect {
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: none;
+    background: #e53e3e;
+    color: #fff;
+    align-self: flex-start;
+}
+
+.btn-sterge-proiect:hover {
+    background: #c53030;
+}
+
+/* Neutral grey outline = secondary action (review) */
+.btn-recenzie {
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: 1.5px solid #ccc;
+    background: #fff;
+    color: #1a1a2e;
+}
+
+.btn-recenzie:hover {
+    background: #f0f0f0;
+}
+
+/* Red outline = softer negative action (reject offer) */
+.btn-respinge-oferta {
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: 1.5px solid #e53e3e;
+    background: #fff;
+    color: #e53e3e;
+    align-self: flex-start;
+}
+
+.btn-respinge-oferta:hover {
+    background: #fff5f5;
+}
+
+
+/* ===== Lists and cards (projects, offers, evaluation, completed) ===== */
+
+/* The four lists share the same layout: no bullets, vertical stack */
+.lista-evaluare,
+.lista-finalizate,
+.lista-oferte,
+.lista-proiecte {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* The four card types share the same look */
+.card-evaluare,
+.card-finalizat,
+.card-oferta,
+.card-proiect {
+    padding: 1rem;
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.card-titlu {
+    margin: 0;
+    color: #1a1a2e;
+    font-size: 1rem;
+}
+
+
+/* ===== Dispute form ===== */
+
+.disputa-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+/* 99% instead of 100% so the textarea doesn't overflow its container */
+.disputa-textarea {
+    width: 99%;
+    border: 1.5px solid #ccc;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.disputa-textarea:focus {
+    outline: none;
+    border-color: #558ee3;
+}
+
+/* Row of buttons on a completed project; wraps on narrow screens */
+.butoane-finalizat {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.25rem;
+}
+
+
+/* ===== Empty state and small helpers ===== */
+
+/* Message shown when a section has no items */
+.sectiune-goala {
+    padding: 1rem;
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+    color: rgb(93, 88, 98);
+    font-size: 0.9rem;
+}
+
+/* Red asterisk for required fields */
+.required {
+    color: red;
+    font-weight: bold;
+    margin-right: 3px;
+}
+
+
+/* ===== Responsive: small screens ===== */
+
+/* Tighter padding, header stacked vertically, activity fields one per row */
+@media (max-width: 600px) {
+    .panou-container {
+        padding: 1rem;
+    }
+
+    .panou-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .form-adaugare-proiect {
+        padding: 1rem;
+    }
+
+    .form-activitate-rand {
+        flex-direction: column;
+    }
+}
+
+
+/* ===== Notes field, review date, back button ===== */
+
+.camp-observatii{
+    margin-top: 0.75rem;
+}
+
+/* Muted small text for the review date */
+.data-recenzie{
+    color: rgb(93, 88, 98);
+    font-size: 0.85rem;
+}
+
+/* Neutral grey outline button for going back */
+.btn-inapoi{
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1.5px solid #ccc;
+    background: #fff;
+    color: #1a1a2e;
+    font-size: 0.875rem;
+    font-weight: 600;
+    align-self: flex-start;
+}
+
+.btn-inapoi:hover{
+    background: #f0f0f0;
+}

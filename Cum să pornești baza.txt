@@ -1,0 +1,4 @@
+1.Creați o baza de date goală în PostgreSQL cu numele "Licenta".
+2.Rulati scriptul "Licenta.sql" pentru a popula baza.
+3. In fisierul "appsettings.json" puteti modifica datele legate de baza, inclusiv parola.
+4."dotnet run" in "FreelancerApp.Server" + "npm run dev" in "FreelancerApp.Client" si aplicatia va porni !
