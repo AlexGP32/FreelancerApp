@@ -46,6 +46,7 @@ namespace FreelancerApp.Server.Controllers
             return User.FindFirst("rol")?.Value;
         }
 
+        // Returns the list of all Dispute requests on the platform awaiting a judge's decision
         [HttpGet("deschise")]
         public async Task<IActionResult> GetDisputeDeschise()
         {
@@ -60,12 +61,14 @@ namespace FreelancerApp.Server.Controllers
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
                     string sql = @"SELECT d.id_disputa, d.motiv, d.data_deschiderii, d.link_livrabil, a.descriere as sarcina, p.titlu
                     FROM ""DISPUTA"" d
                     JOIN ""PLATA_CONDITIONATA"" pc ON d.id_plata = pc.id_plata
                     JOIN  ""PROIECT"" p ON pc.id_proiect = p.id_proiect
                     JOIN ""ANGAJARE"" a ON a.id_autorizare_plata = pc.id_autorizare_plata
                     WHERE d.status = 'Deschisă'";
+
                     using (var cmd = new NpgsqlCommand(sql, connection))
                     {
                         using (var reader = await cmd.ExecuteReaderAsync())
@@ -75,10 +78,10 @@ namespace FreelancerApp.Server.Controllers
                                 dispute.Add(new
                                 {
                                     id_disputa = reader.GetInt32(0),
-                                    motiv = reader.GetString(1),
+                                    motiv = reader.GetString(1), // The reason for the complaint filed by the client
                                     data_deschiderii = reader.GetDateTime(2),
-                                    linkLivrabil = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                                    sarcina = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                                    linkLivrabil = reader.IsDBNull(3) ? "" : reader.GetString(3), // The product submitted by the Freelancer
+                                    sarcina = reader.IsDBNull(4) ? "" : reader.GetString(4), // The initial agreement both parties agreed upon
                                     titlu = reader.GetString(5)
                                 });
                             }
@@ -94,14 +97,13 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Here the Expert resolves the case by sending PayPal funds either back to the Client or forward to the Freelancer
         [HttpPost("{idDisputa}/rezolva")]
         public async Task<IActionResult> RezolvaDisputa(int idDisputa, [FromBody] RezolvareRequest request)
         {
             var idUtilizatorNullable = GetIdUtilizatorCurent();
-            if (idUtilizatorNullable == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUtilizatorNullable == null) return Unauthorized(new { eroare = "Token invalid." });
+
             int idUtilizator = idUtilizatorNullable.Value;
             if (GetRolCurent() != "Expert_Legal")
             {
@@ -117,15 +119,14 @@ namespace FreelancerApp.Server.Controllers
             using (var connection = new NpgsqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
+
                 string sqlExpert = @"SELECT id_expert FROM ""EXPERT_LEGAL"" WHERE id_utilizator = @idUtilizator";
                 using (var cmd = new NpgsqlCommand(sqlExpert, connection))
                 {
                     cmd.Parameters.AddWithValue("@idUtilizator", idUtilizator);
                     var result = await cmd.ExecuteScalarAsync();
-                    if (result == null)
-                    {
-                        return BadRequest(new { eroare = "Expertul legal nu a fost găsit." });
-                    }
+                    if (result == null) return BadRequest(new { eroare = "Expertul legal nu a fost găsit." });
+
                     idExpert = Convert.ToInt32(result);
                 }
             }
@@ -136,11 +137,15 @@ namespace FreelancerApp.Server.Controllers
                 int idPlata = 0;
                 int idAngajare = 0;
                 string statusDisputa = "";
+
                 using var connection = new NpgsqlConnection(_connectionString);
                 await connection.OpenAsync();
+
                 using var transaction = await connection.BeginTransactionAsync();
                 try
                 {
+                    // We use the 'FOR UPDATE' clause to lock the Dispute table row on read, 
+                    // so two experts don't resolve the same PayPal payment at the exact millisecond.
                     string sqlLock = @"SELECT d.status FROM ""DISPUTA"" d WHERE d.id_disputa = @idDisputa FOR UPDATE";
                     using (var cmdLock = new NpgsqlCommand(sqlLock, connection, transaction))
                     {
@@ -159,6 +164,8 @@ namespace FreelancerApp.Server.Controllers
                         await transaction.RollbackAsync();
                         return BadRequest(new { eroare = "Disputa a fost deja soluționată." });
                     }
+
+                    // Special condition: We stop a Legal Expert from analyzing a case in which they are involved (as Freelancer or Client)
                     string sqlVerifica = @"SELECT COUNT(*) FROM ""DISPUTA"" d
                     JOIN ""PLATA_CONDITIONATA"" pc ON d.id_plata = pc.id_plata
                     JOIN ""PROIECT"" p ON pc.id_proiect = p.id_proiect
@@ -178,6 +185,8 @@ namespace FreelancerApp.Server.Controllers
                             return BadRequest(new { eroare = "Nu poți soluționa o dispută în care ești implicat." });
                         }
                     }
+
+                    // Retrieves the long Auth ID string to communicate with PayPal servers
                     string sqlGet = @"SELECT pc.id_autorizare_plata, pc.id_plata, a.id_angajare
                     FROM ""DISPUTA"" d
                     JOIN ""PLATA_CONDITIONATA"" pc ON d.id_plata = pc.id_plata
@@ -194,11 +203,14 @@ namespace FreelancerApp.Server.Controllers
                             idAngajare = reader.GetInt32(2);
                         }
                     }
+
                     if (string.IsNullOrEmpty(idAutorizare))
                     {
                         await transaction.RollbackAsync();
                         return BadRequest(new { eroare = "Nu s-a găsit nicio autorizare de plată pentru această dispută." });
                     }
+
+                    // Authentication to the PayPal API using secret credentials
                     var clientId = _configuration["PayPal:ClientId"];
                     var secret = _configuration["PayPal:Secret"];
                     var baseUrl = _configuration["PayPal:BaseUrl"];
@@ -208,17 +220,22 @@ namespace FreelancerApp.Server.Controllers
                     var tokenReq = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/v1/oauth2/token");
                     tokenReq.Content = new StringContent("grant_type=client_credentials", Encoding.UTF8, "application/x-www-form-urlencoded");
                     var tokenRes = await httpClient.SendAsync(tokenReq);
+
                     if (!tokenRes.IsSuccessStatusCode)
                     {
                         await transaction.RollbackAsync();
                         _logger.LogError("Autentificare PayPal eșuată cu status {Status}", tokenRes.StatusCode);
                         return StatusCode(502, new { eroare = "Nu s-a putut contacta procesatorul de plăți." });
                     }
+
                     var tokenJson = JsonSerializer.Deserialize<JsonElement>(await tokenRes.Content.ReadAsStringAsync());
                     var accessToken = tokenJson.GetProperty("access_token").GetString();
                     httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
                     HttpResponseMessage paypalRes;
+
+                    // If the Expert rules in favor of the Freelancer, we CAPTURE the held funds.
+                    // If the Expert rules in favor of the Client, we VOID the authorization, returning the funds.
                     if (request.Castigator == "Freelancer")
                     {
                         paypalRes = await httpClient.PostAsync($"{baseUrl}/v2/payments/authorizations/{idAutorizare}/capture",
@@ -229,6 +246,7 @@ namespace FreelancerApp.Server.Controllers
                         paypalRes = await httpClient.PostAsync($"{baseUrl}/v2/payments/authorizations/{idAutorizare}/void",
                         new StringContent("{}", Encoding.UTF8, "application/json"));
                     }
+
                     if (!paypalRes.IsSuccessStatusCode)
                     {
                         await transaction.RollbackAsync();
@@ -236,6 +254,8 @@ namespace FreelancerApp.Server.Controllers
                         _logger.LogError("Operațiune PayPal eșuată pentru disputa {IdDisputa}: {Eroare}", idDisputa, eroarePaypal);
                         return StatusCode(502, new { eroare = "Operațiunea de plată a eșuat, disputa nu a fost soluționată." });
                     }
+
+                    // Update internal dispute status
                     string sqlUpdateDisputa = @"UPDATE ""DISPUTA"" 
                     SET status = 'Închisă', data_deciziei = @dataDeciziei, id_expert = @idExpert
                     WHERE id_disputa = @idDisputa";
@@ -247,7 +267,9 @@ namespace FreelancerApp.Server.Controllers
                         await cmd.ExecuteNonQueryAsync();
                     }
 
+                    // Different UI status depending on who won
                     string statusPlata = request.Castigator == "Client" ? "Rambursat" : "Finalizat";
+
                     string sqlUpdatePlata = @"UPDATE ""PLATA_CONDITIONATA""
                     SET status = @status WHERE id_plata = @idPlata";
                     using (var cmd = new NpgsqlCommand(sqlUpdatePlata, connection, transaction))
@@ -266,6 +288,7 @@ namespace FreelancerApp.Server.Controllers
                         await cmd.ExecuteNonQueryAsync();
                     }
 
+                    // Closes the project automatically if it's the last contract
                     string sqlVerificaProiect = @"UPDATE ""PROIECT"" p 
                     SET status = 'Finalizat'
                     WHERE p.id_proiect = (SELECT act.id_proiect

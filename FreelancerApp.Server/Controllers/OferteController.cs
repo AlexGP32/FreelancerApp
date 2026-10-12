@@ -35,6 +35,7 @@ namespace FreelancerApp.Server.Controllers
             return User.FindFirst("rol")?.Value;
         }
 
+        // Allows a Freelancer to send a job offer to a Project Activity
         [HttpPost]
         public async Task<IActionResult> TrimiteOferta([FromBody] TrimiteOfertaRequest cerere)
         {
@@ -43,11 +44,14 @@ namespace FreelancerApp.Server.Controllers
             {
                 return Unauthorized(new { eroare = "Token invalid." });
             }
+
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Validate that they indeed have an active Freelancer profile
                     string sqlFindFreelancer = @"SELECT id_freelancer FROM ""FREELANCER"" WHERE id_utilizator = @idUser LIMIT 1";
                     int idFreelancerFinal = 0;
                     using (var cmdFind = new NpgsqlCommand(sqlFindFreelancer, connection))
@@ -60,6 +64,8 @@ namespace FreelancerApp.Server.Controllers
                         }
                         idFreelancerFinal = Convert.ToInt32(result);
                     }
+
+                    // A user holding both Freelancer and Client roles CANNOT apply to a project they created.
                     string sqlProprietarProiect = @"
                         SELECT c.id_utilizator
                         FROM ""ACTIVITATE"" a
@@ -79,6 +85,8 @@ namespace FreelancerApp.Server.Controllers
                             return BadRequest(new { message = "Nu poți aplica la propriul tău proiect." });
                         }
                     }
+
+                    // Blocks spam. If the Freelancer has a 'Pending' offer on a certain job, they cannot send other offers
                     string sqlCheckDuplicate = @"SELECT COUNT(*) FROM ""OFERTA"" WHERE id_activitate = @idAct AND id_freelancer = @idFree AND status NOT IN ('Respins')";
                     using (var cmdCheck = new NpgsqlCommand(sqlCheckDuplicate, connection))
                     {
@@ -90,6 +98,8 @@ namespace FreelancerApp.Server.Controllers
                             return BadRequest(new { message = "Ai aplicat deja la acest job!" });
                         }
                     }
+
+                    // If all validations pass, create the proposal / offer.
                     string sqlInsert = @"INSERT INTO ""OFERTA""(id_activitate, id_freelancer,  mesaj, data_ofertarii, status, pret, durata, link) VALUES(@idAct, @idFree, @mesaj, @data, 'În Așteptare', @pret, @durata, @link)";
                     using (var cmdInsert = new NpgsqlCommand(sqlInsert, connection))
                     {
@@ -111,14 +121,13 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Fetches all "Pending" offers to the Dashboard of the Client owning the project
         [HttpGet("client")]
         public async Task<IActionResult> GetOfertePentruClient()
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
             try
             {
                 var oferte = new List<object>();
@@ -138,6 +147,7 @@ namespace FreelancerApp.Server.Controllers
                         idClient = Convert.ToInt32(result);
                     }
 
+                    // We fetch the budget allocated to the initial activity, as well as the price of the Freelancer's offer
                     string sql = @"SELECT o.id_oferta, o.mesaj, o.data_ofertarii, o.status, a.titlu_activitate, p.titlu as titlu_proiect, u.nume, o.pret, p.buget
                     FROM ""OFERTA"" o
                     JOIN ""ACTIVITATE"" a ON o.id_activitate = a.id_activitate
@@ -177,23 +187,27 @@ namespace FreelancerApp.Server.Controllers
                 return StatusCode(500, new { eroare = "Eroare la aducerea ofertelor" });
             }
         }
+
+        // When the client validates the PayPal checkout on the frontend, this endpoint generates the final "Job" (Angajare) on the Backend.
         [HttpPost("accepta/{idOferta}")]
         public async Task<IActionResult> AcceptaOferta(int idOferta, [FromBody] AcceptaOfertaRequest request)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
+            // We need the PayPal Authorization ID to capture the blocked funds later, after delivery
             if (request == null || string.IsNullOrEmpty(request.AuthorizationId))
             {
                 return BadRequest(new { eroare = "ID-ul de autorizare PayPal lipsește." });
             }
+
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Safety check to ensure the user accessing the route actually owns the project
                     string sqlProprietarOferta = @"
                         SELECT c.id_utilizator
                         FROM ""OFERTA"" o
@@ -205,19 +219,16 @@ namespace FreelancerApp.Server.Controllers
                     {
                         cmdProp.Parameters.AddWithValue("@idOferta", idOferta);
                         var idUtilizatorProprietar = await cmdProp.ExecuteScalarAsync();
-                        if (idUtilizatorProprietar == null)
-                        {
-                            return NotFound(new { mesaj = "Oferta nu a fost găsită" });
-                        }
-                        if (Convert.ToInt32(idUtilizatorProprietar) != idUserCurent.Value)
-                        {
-                            return Forbid();
-                        }
+                        if (idUtilizatorProprietar == null) return NotFound(new { mesaj = "Oferta nu a fost găsită" });
+
+                        if (Convert.ToInt32(idUtilizatorProprietar) != idUserCurent.Value) return Forbid();
                     }
+
                     using (var transaction = await connection.BeginTransactionAsync())
                     {
                         try
                         {
+                            // 1. Update offer as 'Accepted' (Prevents network race conditions where someone double-clicks)
                             string sqlUpdateOferta = @"UPDATE ""OFERTA"" SET status = 'Acceptat' WHERE id_oferta = @idOferta AND status = 'În Așteptare' RETURNING id_activitate, id_freelancer, mesaj";
                             int idActivitate = 0;
                             int idFreelancer = 0;
@@ -239,6 +250,8 @@ namespace FreelancerApp.Server.Controllers
                                     }
                                 }
                             }
+
+                            // 2. Retrieve activity details
                             string titluActivitate = "";
                             string sqlGetTitlu = @"SELECT titlu_activitate FROM ""ACTIVITATE"" WHERE id_activitate = @idAct";
                             using (var cmdTitlu = new NpgsqlCommand(sqlGetTitlu, connection, transaction))
@@ -247,6 +260,8 @@ namespace FreelancerApp.Server.Controllers
                                 var rezultat = await cmdTitlu.ExecuteScalarAsync();
                                 titluActivitate = rezultat?.ToString() ?? "Contract Activ";
                             }
+
+                            // 3. Create the Job record
                             string sqlInsertAngajare = @"INSERT INTO ""ANGAJARE""(id_activitate, id_freelancer, titlu, descriere, link, data_angajarii, id_autorizare_plata, status_plata) VALUES(@idAct, @idFree, @titlu, @descriere, @link, @data, @idAuth, @statusPlata)";
                             using (var cmdInsert = new NpgsqlCommand(sqlInsertAngajare, connection, transaction))
                             {
@@ -255,11 +270,13 @@ namespace FreelancerApp.Server.Controllers
                                 cmdInsert.Parameters.AddWithValue("@descriere", mesaj);
                                 cmdInsert.Parameters.AddWithValue("@data", DateTime.Now);
                                 cmdInsert.Parameters.AddWithValue("@titlu", titluActivitate);
-                                cmdInsert.Parameters.AddWithValue("@link", DBNull.Value);
+                                cmdInsert.Parameters.AddWithValue("@link", DBNull.Value); // Work hasn't been executed yet, link is empty.
                                 cmdInsert.Parameters.AddWithValue("@idAuth", request.AuthorizationId);
                                 cmdInsert.Parameters.AddWithValue("@statusPlata", "Autorizat");
                                 await cmdInsert.ExecuteNonQueryAsync();
                             }
+
+                            // 4. Fetch offer value and create the reference in the ESCROW/CONDITIONAL_PAYMENT table
                             string sqlGetProiect = @"SELECT a.id_proiect, o.pret
                             FROM ""OFERTA"" o
                             JOIN ""ACTIVITATE"" a ON o.id_activitate = a.id_activitate
@@ -287,6 +304,8 @@ namespace FreelancerApp.Server.Controllers
                                 cmdPlata.Parameters.AddWithValue("@idAuth", request.AuthorizationId);
                                 await cmdPlata.ExecuteNonQueryAsync();
                             }
+
+                            // 5. Decreases one slot (job position) from those available for this Job 
                             string sqlUpdateLocuri = @"UPDATE ""ACTIVITATE"" SET nr_maxim_freelanceri = nr_maxim_freelanceri - 1
                             WHERE id_activitate = @idAct AND nr_maxim_freelanceri > 0";
                             using (var cmdUpdateLoc = new NpgsqlCommand(sqlUpdateLocuri, connection, transaction))
@@ -294,6 +313,7 @@ namespace FreelancerApp.Server.Controllers
                                 cmdUpdateLoc.Parameters.AddWithValue("@idAct", idActivitate);
                                 await cmdUpdateLoc.ExecuteNonQueryAsync();
                             }
+
                             await transaction.CommitAsync();
                         }
                         catch (Exception)
@@ -315,15 +335,15 @@ namespace FreelancerApp.Server.Controllers
         public async Task<IActionResult> RespingeOferta(int idOferta)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Only the project creator can reject offers sent to it
                     string sqlProprietarOferta = @"
                         SELECT c.id_utilizator
                         FROM ""OFERTA"" o
@@ -344,6 +364,7 @@ namespace FreelancerApp.Server.Controllers
                             return Forbid();
                         }
                     }
+
                     string sqlUpdateOferta = @"UPDATE ""OFERTA"" SET status = 'Respins' WHERE id_oferta = @idOferta AND status = 'În Așteptare'";
                     using (var cmdUpdate = new NpgsqlCommand(sqlUpdateOferta, connection))
                     {

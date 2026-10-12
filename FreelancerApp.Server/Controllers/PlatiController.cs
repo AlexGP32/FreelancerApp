@@ -12,6 +12,7 @@ using Npgsql;
 
 namespace FreelancerApp.Server.Controllers
 {
+    // Central controller dictating communication with PayPal APIs 
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -33,13 +34,11 @@ namespace FreelancerApp.Server.Controllers
         private int? GetIdUtilizatorCurent()
         {
             var claim = User.FindFirst("id");
-            if (claim == null || !int.TryParse(claim.Value, out int id))
-            {
-                return null;
-            }
+            if (claim == null || !int.TryParse(claim.Value, out int id)) return null;
             return id;
         }
 
+        // Helper function to temporarily obtain an access token from PayPal servers
         private async Task<string> GetAccessToken()
         {
             using var client = new HttpClient();
@@ -54,14 +53,13 @@ namespace FreelancerApp.Server.Controllers
             return result.GetProperty("access_token").GetString();
         }
 
+        // 1. This is the first step when the Client wants to accept an offer: the PayPal modal opens.
         [HttpPost("CreeazaComanda")]
         public async Task<IActionResult> CreeazaComanda([FromBody] CreareComanda dto)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
 
             decimal pretOferta = 0;
             string descriereOferta = string.Empty;
@@ -71,6 +69,8 @@ namespace FreelancerApp.Server.Controllers
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Verifies that the offer belongs to the client calling the API
                     string sqlVerify = @"
                         SELECT c.id_utilizator, o.pret, a.titlu_activitate 
                         FROM ""OFERTA"" o
@@ -105,6 +105,9 @@ namespace FreelancerApp.Server.Controllers
                 var accessToken = await GetAccessToken();
                 using var client = new HttpClient();
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+                // We set the payment system's intent to AUTHORIZE the funds (hold on client's card), 
+                // WITHOUT instantly CAPTURING (extracting) them
                 var orderRequest = new
                 {
                     intent = "AUTHORIZE",
@@ -132,7 +135,7 @@ namespace FreelancerApp.Server.Controllers
                 }
 
                 var result = JsonSerializer.Deserialize<JsonElement>(jsonResponse);
-                return Ok(new { id = result.GetProperty("id").GetString() });
+                return Ok(new { id = result.GetProperty("id").GetString() }); // Sent to Frontend to trigger the specific popup
             }
             catch (Exception ex)
             {
@@ -140,14 +143,12 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // 2. This is the second step, called from Frontend in the "onApprove" method, right after the client inputs the card and confirms in PayPal. 
         [HttpPost("FinalizeazaComanda")]
         public async Task<IActionResult> FinalizeazaComanda([FromBody] FinalizareComanda dto)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
 
             try
             {
@@ -156,14 +157,16 @@ namespace FreelancerApp.Server.Controllers
                 client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
                 client.DefaultRequestHeaders.Add("Prefer", "return=representation");
                 var content = new StringContent("", Encoding.UTF8, "application/json");
+
+                // Confirms the PayPal process by capturing an Authorization ID, necessary as proof of holding funds
                 var response = await client.PostAsync($"{sandboxUrl}/v2/checkout/orders/{dto.OrderID}/authorize", content);
                 var jsonResponse = await response.Content.ReadAsStringAsync();
-                
+
                 if (!response.IsSuccessStatusCode)
                 {
                     return BadRequest(new { mesaj = "Eroare la autorizare", detalii = jsonResponse });
                 }
-                
+
                 var result = JsonSerializer.Deserialize<JsonElement>(jsonResponse);
                 var authId = result.GetProperty("purchase_units")[0].GetProperty("payments").GetProperty("authorizations")[0].GetProperty("id").GetString();
                 return Ok(new { authorizationId = authId });
@@ -174,6 +177,7 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // The method here  exists as a fallback mechanism for the final extraction of locked funds
         [HttpPost("{idAngajare}/elibereaza-plata")]
         [Authorize]
         public async Task<IActionResult> ElibereazaPlata(int idAngajare)
@@ -269,5 +273,5 @@ namespace FreelancerApp.Server.Controllers
                 return StatusCode(500, new { eroare = ex.Message });
             }
         }
-    } 
-} 
+    }
+}

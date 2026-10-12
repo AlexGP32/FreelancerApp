@@ -18,7 +18,7 @@ namespace FreelancerApp.Server.Controllers
         public CertificatController(IConfiguration configuration, IWebHostEnvironment env)
         {
             _connectionString = configuration.GetConnectionString("LicentaBaza");
-            _env = env;
+            _env = env; // Used to retrieve the local path to the 'Uploads' directory where certificates are stored
         }
 
         private int? GetIdUtilizatorCurent()
@@ -36,14 +36,12 @@ namespace FreelancerApp.Server.Controllers
             return User.FindFirst("rol")?.Value;
         }
 
+        // Asynchronous endpoint that receives a document from a Freelancer
         [HttpPost("adauga")]
         public async Task<IActionResult> AdaugaCertificat([FromForm] AdaugaCertificatRequest cerere)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
 
             try
             {
@@ -52,12 +50,14 @@ namespace FreelancerApp.Server.Controllers
                     return BadRequest(new { eroare = "Nu a fost încărcat niciun fișier valid." });
                 }
 
+                // Ensuring the directory system is functional
                 string uploadsFolder = Path.Combine(_env.ContentRootPath, "Uploads");
                 if (!Directory.Exists(uploadsFolder))
                 {
                     Directory.CreateDirectory(uploadsFolder);
                 }
 
+                // Generates a UUID to prevent conflicts if 2 users upload a 'certificat.pdf' simultaneously
                 string extensie = Path.GetExtension(cerere.Fisier.FileName);
                 string numeFisierUnic = Guid.NewGuid().ToString() + extensie;
                 string caleFisierCompleta = Path.Combine(uploadsFolder, numeFisierUnic);
@@ -67,6 +67,7 @@ namespace FreelancerApp.Server.Controllers
                     await cerere.Fisier.CopyToAsync(stream);
                 }
 
+                // Saves only the generated filename in the database, not the binary data
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
@@ -91,14 +92,12 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Endpoint for the Legal Expert to fetch the work queue (list of certificates awaiting validation)
         [HttpGet("nevalidate")]
         public async Task<IActionResult> GetCertificateNevalidate()
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
 
             if (GetRolCurent() != "Expert_Legal")
             {
@@ -113,6 +112,7 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
+                    // A left join to find certificate entries that DO NOT yet have a corresponding entry in the Validation table
                     string sql = @"SELECT c.id_certificat, c.id_freelancer, c.fisier, c.tip, c.data_incarcarii
                                    FROM ""CERTIFICAT"" c
                                    LEFT JOIN ""VALIDARE"" v ON c.id_certificat = v.id_certificat
@@ -143,14 +143,12 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Saves the Expert's Legal Decision on a certificate (approved/rejected with observations)
         [HttpPost("decizie")]
         public async Task<IActionResult> SalveazaDecizie([FromBody] DecizieRequest cerere)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
 
             if (GetRolCurent() != "Expert_Legal")
             {
@@ -170,14 +168,11 @@ namespace FreelancerApp.Server.Controllers
                     {
                         cmdExp.Parameters.AddWithValue("@idUser", idUserCurent.Value);
                         var result = await cmdExp.ExecuteScalarAsync();
-                        if (result == null)
-                        {
-                            return BadRequest("Expertul nu a fost găsit în baza de date");
-                        }
-
+                        if (result == null) return BadRequest("Expertul nu a fost găsit în baza de date");
                         idExpert = Convert.ToInt32(result);
                     }
 
+                    // The expert is not allowed to validate their own certificate if they also act as a Freelancer
                     string sqlProprietarCertificat = @"
                         SELECT f.id_utilizator 
                         FROM ""CERTIFICAT"" c
@@ -188,10 +183,7 @@ namespace FreelancerApp.Server.Controllers
                     {
                         cmdProp.Parameters.AddWithValue("@idCert", cerere.IdCertificat);
                         var idUtilizatorProprietar = await cmdProp.ExecuteScalarAsync();
-                        if (idUtilizatorProprietar == null)
-                        {
-                            return NotFound("Certificatul nu a fost găsit.");
-                        }
+                        if (idUtilizatorProprietar == null) return NotFound("Certificatul nu a fost găsit.");
 
                         if (Convert.ToInt32(idUtilizatorProprietar) == idUserCurent.Value)
                         {
@@ -230,14 +222,12 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Endpoint that Freelancers call to check their account status 
         [HttpGet("status")]
         public async Task<IActionResult> VerificaStatusCertificat()
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
 
             try
             {
@@ -260,6 +250,7 @@ namespace FreelancerApp.Server.Controllers
                             if (await reader.ReadAsync())
                             {
                                 string decizie = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                                // Treating "aprobat" and "validat" as safe recognition keys for the decision
                                 bool esteValidat = decizie.ToLower() == "aprobat" || decizie.ToLower() == "validat";
 
                                 return Ok(new
@@ -285,14 +276,12 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Completely overwrites the document (e.g., A Freelancer wants to attach a new certificate instead of the rejected one)
         [HttpPut("editeaza")]
         public async Task<IActionResult> EditeazaCertificat([FromForm] AdaugaCertificatRequest cerere)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
 
             try
             {
@@ -332,6 +321,7 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
+                    // Physically removes the invalid file from the disk to optimize space
                     string uploadsFolder = Path.Combine(_env.ContentRootPath, "Uploads");
                     if (!string.IsNullOrEmpty(fisierVechi))
                     {
@@ -342,10 +332,7 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    if (!Directory.Exists(uploadsFolder))
-                    {
-                        Directory.CreateDirectory(uploadsFolder);
-                    }
+                    if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
 
                     string extensie = Path.GetExtension(cerere.Fisier.FileName);
                     string numeFisierUnic = Guid.NewGuid().ToString() + extensie;
@@ -356,6 +343,7 @@ namespace FreelancerApp.Server.Controllers
                         await cerere.Fisier.CopyToAsync(stream);
                     }
 
+                    // When modifying a certificate, we reset the expert's decision (Delete from validation table). The new PDF must be re-analyzed.
                     string sqlUpdate = @"
                         UPDATE ""CERTIFICAT"" 
                         SET tip = @tip, fisier = @fisier, data_incarcarii = @dataIncarcarii
@@ -381,14 +369,12 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Allows a user to permanently delete the document from the ecosystem
         [HttpDelete("{idCertificat}")]
         public async Task<IActionResult> StergeCertificat(int idCertificat)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
 
             try
             {
@@ -417,13 +403,15 @@ namespace FreelancerApp.Server.Controllers
 
                             fisier = reader.IsDBNull(0) ? null : reader.GetString(0);
                             int idUtilizatorProprietar = reader.GetInt32(1);
+
                             if (idUtilizatorProprietar != idUserCurent.Value)
                             {
-                                return Forbid();
+                                return Forbid(); // Prevents ID spoofing 
                             }
                         }
                     }
 
+                    // Again, cleans up garbage from the hard drive
                     if (!string.IsNullOrEmpty(fisier))
                     {
                         string uploadsFolder = Path.Combine(_env.ContentRootPath, "Uploads");
@@ -434,6 +422,7 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
+                    // We must ensure all traces of this document's validation disappear before deleting it.
                     string sqlDelete = @"
                         DELETE FROM ""VALIDARE"" WHERE id_certificat = @id;
                         DELETE FROM ""CERTIFICAT"" WHERE id_certificat = @id;";

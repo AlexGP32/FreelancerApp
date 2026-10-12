@@ -37,6 +37,7 @@ namespace FreelancerApp.Server.Controllers
             return User.FindFirst("rol")?.Value;
         }
 
+        // Dynamically generates a PDF file containing PayPal transaction data and contract information
         [HttpGet("{idAngajare}/descarca")]
         public async Task<IActionResult> DescarcaFactura(int idAngajare)
         {
@@ -61,6 +62,8 @@ namespace FreelancerApp.Server.Controllers
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Complex query to gather all textual details needed for invoice generation
                     string sql = @"SELECT uc.nume AS numeClient, 
                     uf.nume AS numeFreelancer,
                     p.titlu AS titluProiect,
@@ -79,6 +82,7 @@ namespace FreelancerApp.Server.Controllers
                     JOIN ""UTILIZATOR"" uc ON c.id_utilizator  = uc.id_utilizator
                     JOIN ""PLATA_CONDITIONATA"" pc ON pc.id_autorizare_plata = a.id_autorizare_plata
                     WHERE a.id_angajare = @idAngajare";
+
                     using (var cmd = new NpgsqlCommand(sql, connection))
                     {
                         cmd.Parameters.AddWithValue("@idAngajare", idAngajare);
@@ -101,6 +105,8 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
                 }
+
+                // Only the parties involved in the contract or the mediating Legal Expert have the legal right to view the PDF.
                 bool esteParteImplicata = idUserCurent.Value == idUtilizatorClient || idUserCurent.Value == idUtilizatorFreelancer;
                 bool esteExpertLegal = GetRolCurent() == "Expert_Legal";
                 if (!esteParteImplicata && !esteExpertLegal)
@@ -108,6 +114,7 @@ namespace FreelancerApp.Server.Controllers
                     return Forbid();
                 }
 
+                // Generate PDF file via the QuestPDF library
                 var pdf = Document.Create(container =>
                 {
                     container.Page(page =>
@@ -136,7 +143,10 @@ namespace FreelancerApp.Server.Controllers
                             .FontSize(9).FontColor(Colors.Grey.Medium).AlignCenter();
                     });
                 });
+
                 var pdfBytes = pdf.GeneratePdf();
+
+                // Returns the byte array transformed into a physical PDF file
                 return File(pdfBytes, "application/pdf", $"Factura_{idAngajare}.pdf");
             }
             catch (Exception ex)

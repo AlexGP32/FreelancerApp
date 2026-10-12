@@ -20,11 +20,14 @@ namespace FreelancerApp.Server.Controllers
     {
         private readonly string _connectionString = string.Empty;
         private readonly IConfiguration _configuration;
+
         public AngajariController(IConfiguration configuration)
         {
             _connectionString = configuration.GetConnectionString("LicentaBaza");
             _configuration = configuration;
         }
+
+        // Extracts ID from JWT token (passed via Authorize middleware)
         private int? GetIdUtilizatorCurent()
         {
             var claim = User.FindFirst("id");
@@ -35,14 +38,13 @@ namespace FreelancerApp.Server.Controllers
             return id;
         }
 
+        // Returns ongoing jobs for a Freelancer (authorized for payment, but work not yet delivered)
         [HttpGet("freelancer/active")]
         public async Task<IActionResult> GetAngajariActive()
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
             try
             {
                 var angajari = new List<object>();
@@ -54,7 +56,8 @@ namespace FreelancerApp.Server.Controllers
                     JOIN ""FREELANCER"" f ON a.id_freelancer = f.id_freelancer
                     WHERE f.id_utilizator = @idFreelancer
                     AND a.status_plata ='Autorizat'
-                    AND a.link IS NULL";
+                    AND a.link IS NULL"; // 'link' is the deliverable URL. As long as it is NULL, the project is still in progress.
+
                     using (var cmd = new NpgsqlCommand(sql, connection))
                     {
                         cmd.Parameters.AddWithValue("@idFreelancer", idUserCurent.Value);
@@ -79,20 +82,21 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // The status parameter dictates whether the Client wants jobs 'In Evaluare' (In Review) or completed ones.
         [HttpGet("client/lucrari")]
         public async Task<IActionResult> GetLucrari([FromQuery] string status)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
             try
             {
                 var lucrari = new List<object>();
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // The OR condition handles the fact that refunds (Disputes) also fall under completed projects.
                     string sql = @"SELECT a.id_angajare, a.titlu, a.descriere, a.link, a.data_angajarii, u.nume as numeFreelancer, p.titlu as titluProiect, pc.suma, f.id_freelancer
                     FROM ""ANGAJARE"" a
                     JOIN ""FREELANCER"" f ON a.id_freelancer = f.id_freelancer
@@ -134,14 +138,13 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Similar to the client function, used by a Freelancer to display work history (Freelancer Dashboard)
         [HttpGet("freelancer/finalizate")]
         public async Task<IActionResult> GetAngajariFinalizateFreelancer()
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
             try
             {
                 var angajari = new List<object>();
@@ -181,14 +184,13 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Contacts PayPal to Capture funds that were only Authorized (locked) at the beginning of the job
         [HttpPost("{idAngajare}/elibereaza-plata")]
         public async Task<IActionResult> ElibereazaPlata(int idAngajare)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
             try
             {
                 string idAutorizare = "";
@@ -196,6 +198,8 @@ namespace FreelancerApp.Server.Controllers
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // 1. Retrieves the Authorization (PayPal Auth ID) based on the job ID from the local database
                     string sqlGet = @"SELECT a.id_autorizare_plata, pc.id_plata, c.id_utilizator
                     FROM ""ANGAJARE"" a
                     JOIN ""ACTIVITATE"" act ON a.id_activitate = act.id_activitate
@@ -220,11 +224,13 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
+                    // Prevents other entities (e.g., other clients/freelancers) from releasing funds via URL spoofing
                     if (idUtilizatorClient != idUserCurent.Value)
                     {
                         return Forbid();
                     }
 
+                    // 2. API Authentication with PayPal servers
                     var clientId = _configuration["PayPal:ClientId"];
                     var secret = _configuration["PayPal:Secret"];
                     var baseUrl = _configuration["PayPal:BaseUrl"];
@@ -237,14 +243,19 @@ namespace FreelancerApp.Server.Controllers
                     var tokenJson = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(
                         await tokenRes.Content.ReadAsStringAsync());
                     var accessToken = tokenJson.GetProperty("access_token").GetString();
+
+                    // 3. Sends the "Capture" command using the PayPal access token
                     httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
                     var captureRes = await httpClient.PostAsync($"{baseUrl}/v2/payments/authorizations/{idAutorizare}/capture",
                     new StringContent("{}", Encoding.UTF8, "application/json"));
+
                     if (!captureRes.IsSuccessStatusCode)
                     {
                         var err = await captureRes.Content.ReadAsStringAsync();
                         return BadRequest(new { eroare = "Eroare PayPal la capturare", detalii = err });
                     }
+
+                    // 4. Updates database status to "Finalizat" (Transaction used to maintain data consistency)
                     using var transaction = await connection.BeginTransactionAsync();
                     try
                     {
@@ -261,6 +272,8 @@ namespace FreelancerApp.Server.Controllers
                             cmd.Parameters.AddWithValue("@idPlata", idPlata);
                             await cmd.ExecuteNonQueryAsync();
                         }
+
+                        // Checks if this contract was the last one in that parent PROJECT; if so, closes the project completely.
                         string sqlVerificaProiect = @"UPDATE ""PROIECT"" p 
                         SET status = 'Finalizat'
                         WHERE p.id_proiect = (SELECT act.id_proiect
@@ -296,6 +309,7 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Endpoint used by a Freelancer to submit the work (Github/GDrive link) to the client for evaluation
         [HttpPost("{idAngajare}/predare")]
         public async Task<IActionResult> PredaLucrare(int idAngajare, [FromBody] PredareRequest request)
         {
@@ -304,17 +318,15 @@ namespace FreelancerApp.Server.Controllers
                 return BadRequest(new { eroare = "Link-ul nu poate fi gol." });
             }
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
 
-                    // Verificam ca angajarea apartine freelancerului curent
+                    // Ensure only the freelancer who won this specific contract can submit documentation
                     string sqlCheck = @"SELECT f.id_utilizator
                     FROM ""ANGAJARE"" a
                     JOIN ""FREELANCER"" f ON a.id_freelancer = f.id_freelancer
@@ -333,6 +345,7 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
+                    // Sets the status to "In Evaluare" (In Review), unlocking the "Release Payment" actions for the client
                     string sqlUpdate = @"UPDATE ""ANGAJARE""
                     SET link = @link, status_plata = 'In Evaluare'
                     WHERE id_angajare = @IdAngajare";
@@ -351,6 +364,7 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Called by the client when unsatisfied with the submitted link, refusing to release PayPal funds
         [HttpPost("{idAngajare}/disputa")]
         public async Task<IActionResult> LanseazaDisputa(int idAngajare, [FromBody] DisputaRequest request)
         {
@@ -359,15 +373,15 @@ namespace FreelancerApp.Server.Controllers
                 return BadRequest(new { eroare = "Motivul disputei este obligatoriu" });
             }
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Identifies payment links so funds cannot be auto-captured if under dispute.
                     string sqlGetPlata = @"SELECT pc.id_plata, a.link, c.id_utilizator
                     FROM ""ANGAJARE"" a
                     JOIN ""ACTIVITATE"" act ON a.id_activitate = act.id_activitate
@@ -375,9 +389,11 @@ namespace FreelancerApp.Server.Controllers
                     JOIN ""CLIENT"" c ON p.id_client = c.id_client
                     JOIN ""PLATA_CONDITIONATA"" pc ON pc.id_autorizare_plata = a.id_autorizare_plata
                     WHERE a.id_angajare = @idAngajare";
+
                     int idPlata = 0;
                     string link = "";
                     int idUtilizatorClient = 0;
+
                     using (var cmd = new NpgsqlCommand(sqlGetPlata, connection))
                     {
                         cmd.Parameters.AddWithValue("@idAngajare", idAngajare);
@@ -399,6 +415,7 @@ namespace FreelancerApp.Server.Controllers
                         return Forbid();
                     }
 
+                    // Prevents spamming the Dispute system via repeated HTTP requests
                     string sqlCheck = @"SELECT COUNT(*)
                     FROM ""DISPUTA""
                     WHERE id_plata = @idPlata";
@@ -411,6 +428,8 @@ namespace FreelancerApp.Server.Controllers
                             return BadRequest(new { eroare = "Există deja o dispută deschisă pentru această angajare." });
                         }
                     }
+
+                    // Registers the new ticket in the system to be picked up by a "Expert_Legal"
                     string sqlInsert = @"INSERT INTO ""DISPUTA"" (id_plata, motiv, data_deschiderii, status, link_livrabil) VALUES (@idPlata, @motiv, @data, 'Deschisă' , @link)";
                     using (var cmd = new NpgsqlCommand(sqlInsert, connection))
                     {
@@ -420,6 +439,7 @@ namespace FreelancerApp.Server.Controllers
                         cmd.Parameters.AddWithValue("@link", link);
                         await cmd.ExecuteNonQueryAsync();
                     }
+
                     string sqlUpdate = @"UPDATE ""ANGAJARE"" SET status_plata = 'Disputat'
                     WHERE id_angajare = @idAngajare";
                     using (var cmd = new NpgsqlCommand(sqlUpdate, connection))

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel.DataAnnotations;
 using FreelancerApp.Server.Services;
 using System.Numerics;
+
 namespace FreelancerApp.Server.Controllers
 {
     [Route("api/[controller]")]
@@ -21,8 +22,8 @@ namespace FreelancerApp.Server.Controllers
     {
         private readonly string _connectionString = string.Empty;
         private readonly IConfiguration _configuration;
+        private readonly EmbeddingService _embeddingService; // Used for AI recommendations based on text vectors
 
-        private readonly EmbeddingService _embeddingService;
         public UtilizatorController(IConfiguration configuration, EmbeddingService embeddingService)
         {
             _connectionString = configuration.GetConnectionString("LicentaBaza");
@@ -30,6 +31,7 @@ namespace FreelancerApp.Server.Controllers
             _embeddingService = embeddingService;
         }
 
+        // Extracts the ID from the JWT token
         private int? GetIdUtilizatorCurent()
         {
             var claim = User.FindFirst("id");
@@ -40,17 +42,23 @@ namespace FreelancerApp.Server.Controllers
             return id;
         }
 
+        // Extracts the role from the JWT token
         private string? GetRolCurent()
         {
             return User.FindFirst("rol")?.Value;
         }
 
+        // Transforms a freelancer's profession and name into a mathematical vector (embedding) 
+        // for semantic search (similar job recommendations) later
         private async Task<string> GenereazaVectorEmbedding(string profesie, string nume)
         {
             string textEmbedding = $"{profesie} {nume}";
             float[] embedding = await _embeddingService.GetEmbeddingAsync(textEmbedding);
+            // Formats the float array as a typical PostgreSQL vector string: [val1, val2, ...]
             return "[" + string.Join(",", embedding.Select(f => f.ToString(System.Globalization.CultureInfo.InvariantCulture))) + "]";
         }
+
+        // --- Registration Endpoints ---
 
         [HttpPost("inregistrare-client")]
         public async Task<IActionResult> InregistrareClient([FromBody] InregistrareClientRequest cerere)
@@ -61,7 +69,10 @@ namespace FreelancerApp.Server.Controllers
         [HttpPost("inregistrare-freelancer")]
         public async Task<IActionResult> InregistrareFreelancer([FromBody] InregistrareFreelancerRequest cerere)
         {
+            // Executes the main user insertion
             var result = await ExecutaInregistrare(cerere, "FREELANCER", "iban", cerere.Iban, "profesie", cerere.Profesie);
+
+            // If added successfully, generates and asynchronously stores the vector embedding
             if (result is OkObjectResult)
             {
                 try
@@ -93,6 +104,7 @@ namespace FreelancerApp.Server.Controllers
         [HttpPost("Inregistrare-admin")]
         public async Task<IActionResult> InregistrareAdmin([FromBody] InregistrareAdminRequest cerere)
         {
+            // Additional validation specific to Admin: must provide a valid secret code from the database
             string checkSqlAdmin = "SELECT COUNT(*) FROM \"ADMIN\" WHERE \"cod_admin\" = @cod";
             using (var connection = new NpgsqlConnection(_connectionString))
             {
@@ -110,6 +122,7 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Generic helper function that handles the transactional logic of creating an account
         private async Task<IActionResult> ExecutaInregistrare(
             DateInregistrare user,
             string tabel,
@@ -123,6 +136,8 @@ namespace FreelancerApp.Server.Controllers
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // 1. Checks if the email address exists
                     string checkSql = "SELECT COUNT(*) FROM \"UTILIZATOR\" WHERE \"email\" = @email";
                     using (var checkCmd = new NpgsqlCommand(checkSql, connection))
                     {
@@ -133,19 +148,26 @@ namespace FreelancerApp.Server.Controllers
                             return BadRequest("Există un cont cu acest email.");
                         }
                     }
+
+                    // A transaction is used so that if role insertion fails (e.g., duplicate IBAN),
+                    // the base USER row doesn't remain "orphaned".
                     using (var trans = await connection.BeginTransactionAsync())
                     {
                         int noulId = 0;
+
+                        // Insert base data + Password hashing
                         string insertSql = "INSERT INTO \"UTILIZATOR\" (\"nume\", \"email\", \"parola\", \"telefon\")  VALUES (@nume, @email, @parola, @telefon) RETURNING id_utilizator";
                         using (var insertCmd = new NpgsqlCommand(insertSql, connection, trans))
                         {
                             insertCmd.Parameters.AddWithValue("@nume", user.Nume);
                             insertCmd.Parameters.AddWithValue("@email", user.Email);
-                            insertCmd.Parameters.AddWithValue("@parola", BC.HashPassword(user.Parola));
+                            insertCmd.Parameters.AddWithValue("@parola", BC.HashPassword(user.Parola)); // Password encryption
                             insertCmd.Parameters.AddWithValue("@telefon", (object?)user.Telefon ?? DBNull.Value);
                             var idResult = await insertCmd.ExecuteScalarAsync();
                             noulId = Convert.ToInt32(idResult);
                         }
+
+                        // Insert common address
                         string adresaSql = "INSERT INTO \"ADRESA\"(id_utilizator, judet, oras, strada, numar) VALUES (@id_utilizator, @judet, @oras, @strada, @numar)";
                         using (var adresaCmd = new NpgsqlCommand(adresaSql, connection, trans))
                         {
@@ -156,6 +178,8 @@ namespace FreelancerApp.Server.Controllers
                             adresaCmd.Parameters.AddWithValue("@numar", user.Numar);
                             await adresaCmd.ExecuteNonQueryAsync();
                         }
+
+                        // Insert into the role-specific table (e.g., CLIENT, FREELANCER, etc.)
                         string sqlTabel = col2 == null
                         ? $"INSERT INTO \"{tabel}\" (\"id_utilizator\", \"{col1}\") VALUES (@id, @v1)"
                         : $"INSERT INTO \"{tabel}\" (\"id_utilizator\", \"{col1}\", \"{col2}\") VALUES (@id, @v1, @v2)";
@@ -177,29 +201,15 @@ namespace FreelancerApp.Server.Controllers
             }
             catch (PostgresException ex) when (ex.SqlState == "23505")
             {
+                // Catches database errors related to duplicate unique keys
                 string mesaj = "Aceste date există deja în sistem.";
                 if (ex.ConstraintName != null)
                 {
-                    if (ex.ConstraintName.ToLower().Contains("cui"))
-                    {
-                        mesaj = "Acest CNP sau CUI este deja înregistrat în sistem.";
-                    }
-                    else if (ex.ConstraintName.ToLower().Contains("iban"))
-                    {
-                        mesaj = "Acest IBAN este deja înregistrat.";
-                    }
-                    else if (ex.ConstraintName.ToLower().Contains("email"))
-                    {
-                        mesaj = "Exista deja un cont cu această adresă de email.";
-                    }
-                    else if (ex.ConstraintName.ToLower().Contains("telefon"))
-                    {
-                        mesaj = "Acest număr de telefon este deja folosit.";
-                    }
-                    else if (ex.ConstraintName.ToLower().Contains("CodLegitimatie"))
-                    {
-                        mesaj = "Acest cod de legitimație este deja folosit.";
-                    }
+                    if (ex.ConstraintName.ToLower().Contains("cui")) mesaj = "Acest CNP sau CUI este deja înregistrat în sistem.";
+                    else if (ex.ConstraintName.ToLower().Contains("iban")) mesaj = "Acest IBAN este deja înregistrat.";
+                    else if (ex.ConstraintName.ToLower().Contains("email")) mesaj = "Exista deja un cont cu această adresă de email.";
+                    else if (ex.ConstraintName.ToLower().Contains("telefon")) mesaj = "Acest număr de telefon este deja folosit.";
+                    else if (ex.ConstraintName.ToLower().Contains("CodLegitimatie")) mesaj = "Acest cod de legitimație este deja folosit.";
                 }
                 return BadRequest(mesaj);
             }
@@ -208,6 +218,8 @@ namespace FreelancerApp.Server.Controllers
                 return StatusCode(500, "Eroare internă la baza de date: " + ex.Message);
             }
         }
+
+        // --- Login ---
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest cerere)
@@ -221,6 +233,8 @@ namespace FreelancerApp.Server.Controllers
                     string numeUser = "";
                     string parolaDb = "";
                     string email = "";
+
+                    // Allows login with a variety of unique identifiers (email, name, SSN/CUI, badge, admin_code)
                     string sqlUser = @"SELECT u.id_utilizator, u.nume, u.parola, u.email 
                     FROM ""UTILIZATOR"" u
                     LEFT JOIN ""CLIENT"" c ON u.id_utilizator = c.id_utilizator
@@ -249,35 +263,27 @@ namespace FreelancerApp.Server.Controllers
                             }
                         }
                     }
+
+                    // Encrypted password verification
                     if (!BC.Verify(cerere.Parola, parolaDb))
                     {
                         return Unauthorized("Email sau parolă incorectă.");
                     }
+
+                    // Checks if the user selected the role they want to log into
                     if (string.IsNullOrEmpty(cerere.Rol))
                     {
                         return BadRequest("Te rog selectează un tip de cont pentru a te autentifica.");
                     }
+
+                    // Checks if the person actually holds that role
                     string tabelCautat = "";
-                    if (cerere.Rol == "Client")
-                    {
-                        tabelCautat = "\"CLIENT\"";
-                    }
-                    else if (cerere.Rol == "Freelancer")
-                    {
-                        tabelCautat = "\"FREELANCER\"";
-                    }
-                    else if (cerere.Rol == "Expert_Legal")
-                    {
-                        tabelCautat = "\"EXPERT_LEGAL\"";
-                    }
-                    else if (cerere.Rol == "Admin")
-                    {
-                        tabelCautat = "\"ADMIN\"";
-                    }
-                    else
-                    {
-                        return BadRequest($"Rol selectat invalid '{cerere.Rol}'");
-                    }
+                    if (cerere.Rol == "Client") tabelCautat = "\"CLIENT\"";
+                    else if (cerere.Rol == "Freelancer") tabelCautat = "\"FREELANCER\"";
+                    else if (cerere.Rol == "Expert_Legal") tabelCautat = "\"EXPERT_LEGAL\"";
+                    else if (cerere.Rol == "Admin") tabelCautat = "\"ADMIN\"";
+                    else return BadRequest($"Rol selectat invalid '{cerere.Rol}'");
+
                     string sqlVerificareRol = $"SELECT COUNT(*) FROM {tabelCautat} WHERE id_utilizator = @id";
                     using (var cmdRol = new NpgsqlCommand(sqlVerificareRol, connection))
                     {
@@ -288,8 +294,10 @@ namespace FreelancerApp.Server.Controllers
                             return Unauthorized($"Acest cont există, dar nu are profil creat pentru rolul de {cerere.Rol}.");
                         }
                     }
+
                     string rolActiv = cerere.Rol;
                     int? idSpecificClient = null;
+                    // If client, also retrieve the specific client ID
                     if (rolActiv == "Client")
                     {
                         string sqlClient = "SELECT id_client FROM \"CLIENT\" WHERE id_utilizator = @id";
@@ -303,6 +311,8 @@ namespace FreelancerApp.Server.Controllers
                             }
                         }
                     }
+
+                    // Generate JWT Token
                     var cheie = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Cheie"]!));
                     var credentiale = new SigningCredentials(cheie, SecurityAlgorithms.HmacSha256);
                     var claims = new[]
@@ -317,6 +327,7 @@ namespace FreelancerApp.Server.Controllers
                         signingCredentials: credentiale
                     );
                     string tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
                     return Ok(new
                     {
                         token = tokenString,
@@ -334,6 +345,8 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // --- Profile Data ---
+
         [HttpGet("profil/{id}")]
         [Authorize]
         public async Task<IActionResult> PreluareProfil(int id)
@@ -343,15 +356,18 @@ namespace FreelancerApp.Server.Controllers
             {
                 return Unauthorized(new { eroare = "Token invalid." });
             }
+            // Only an Admin or the account owner can retrieve profile data
             if (idUserCurent.Value != id && GetRolCurent() != "Admin")
             {
                 return Forbid();
             }
+
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+                    // Fetches data from multiple tables. The user can have any number of roles attached to the account.
                     string sql = @"SELECT u.nume, u.email , u.telefon, ad.judet, ad.oras, ad.strada, ad.numar, c.cnp_cui, f.iban, f.profesie, e.departament, e.cod_legitimatie
                                 FROM ""UTILIZATOR"" u  LEFT JOIN ""ADRESA"" ad ON u.id_utilizator = ad.id_utilizator
                                 LEFT JOIN ""CLIENT"" c ON u.id_utilizator = c.id_utilizator
@@ -400,16 +416,17 @@ namespace FreelancerApp.Server.Controllers
         public async Task<IActionResult> ActualizareDate([FromBody] ActualizareDateRequest cerere)
         {
             var idUserClaim = User.FindFirst("id")?.Value;
-            if (idUserClaim == null)
-            {
-                return Unauthorized();
-            }
+            if (idUserClaim == null) return Unauthorized();
+
             int idUser = int.Parse(idUserClaim);
+
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Ensure the newly desired email is not already taken
                     string checkEmailSql = "SELECT COUNT(*) FROM \"UTILIZATOR\" WHERE email = @email AND id_utilizator != @id";
                     using (var checkCmd = new NpgsqlCommand(checkEmailSql, connection))
                     {
@@ -421,8 +438,10 @@ namespace FreelancerApp.Server.Controllers
                             return BadRequest("Acest email este deja folosit de alt cont.");
                         }
                     }
+
                     using (var trans = await connection.BeginTransactionAsync())
                     {
+                        // Update base USER table (password is only modified if the client typed a new one)
                         string updateUtilizator = "UPDATE \"UTILIZATOR\" SET nume = @nume, email = @email, telefon = @telefon";
                         if (!string.IsNullOrEmpty(cerere.Parola))
                         {
@@ -441,6 +460,8 @@ namespace FreelancerApp.Server.Controllers
                             }
                             await cmdU.ExecuteNonQueryAsync();
                         }
+
+                        // Update address
                         string updateAdresa = "UPDATE \"ADRESA\" SET judet = @judet, oras = @oras, strada = @strada , numar = @numar WHERE id_utilizator = @id";
                         using (var cmdA = new NpgsqlCommand(updateAdresa, connection, trans))
                         {
@@ -451,6 +472,8 @@ namespace FreelancerApp.Server.Controllers
                             cmdA.Parameters.AddWithValue("@id", idUser);
                             await cmdA.ExecuteNonQueryAsync();
                         }
+
+                        // Update based on the active roles the user has (cerere.CnpCui is non-empty only if the request comes from a Client form, etc.)
                         if (!string.IsNullOrEmpty(cerere.CnpCui))
                         {
                             string updateC = "UPDATE \"CLIENT\" SET cnp_cui = @cnp WHERE id_utilizator = @id";
@@ -463,6 +486,7 @@ namespace FreelancerApp.Server.Controllers
                         }
                         if (!string.IsNullOrEmpty(cerere.Iban))
                         {
+                            // If a freelancer updates their data, the embedding must be regenerated for semantic search
                             string vectorString = await GenereazaVectorEmbedding(cerere.Profesie, cerere.Nume);
                             string updateF = "UPDATE \"FREELANCER\" SET iban = @iban, profesie = @profesie, embedding = @embedding::vector WHERE id_utilizator = @id";
                             using (var cmdF = new NpgsqlCommand(updateF, connection, trans))
@@ -500,15 +524,14 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Allows adding a new profile (role) to an already existing account
         [HttpPost("schimbare-rol")]
         [Authorize]
         public async Task<IActionResult> SchimbareRol([FromBody] SchimbareRolRequest cerere)
         {
             var idUserClaim = User.FindFirst("id")?.Value;
-            if (idUserClaim == null)
-            {
-                return Unauthorized();
-            }
+            if (idUserClaim == null) return Unauthorized();
+
             int idUser = int.Parse(idUserClaim);
             try
             {
@@ -517,6 +540,8 @@ namespace FreelancerApp.Server.Controllers
                     await connection.OpenAsync();
                     string sqlCheck = "";
                     string sqlInsert = "";
+
+                    // Sets verification and insertion queries based on the desired role
                     if (cerere.RolNou == "Client")
                     {
                         sqlCheck = "SELECT COUNT(*) FROM \"CLIENT\" WHERE id_utilizator = @id";
@@ -551,6 +576,8 @@ namespace FreelancerApp.Server.Controllers
                     {
                         return BadRequest("Rol necunoscut.");
                     }
+
+                    // Checks if the user already has this role attached to the account
                     using (var cmdCheck = new NpgsqlCommand(sqlCheck, connection))
                     {
                         cmdCheck.Parameters.AddWithValue("@id", idUser);
@@ -560,6 +587,7 @@ namespace FreelancerApp.Server.Controllers
                             return BadRequest($"Ai deja profil creat pentru rolul de {cerere.RolNou}!");
                         }
 
+                        // Generates the embedding if the new role is Freelancer
                         string? vectorString = null;
                         if (cerere.RolNou == "Freelancer")
                         {
@@ -574,6 +602,7 @@ namespace FreelancerApp.Server.Controllers
                             vectorString = await GenereazaVectorEmbedding(cerere.Profesie ?? "", numeUtilizator);
                         }
 
+                        // Adds the new profile to the database
                         using (var cmdIn = new NpgsqlCommand(sqlInsert, connection))
                         {
                             cmdIn.Parameters.AddWithValue("@id", idUser);
@@ -612,25 +641,26 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // --- Admin Options ---
+
+        // Exclusive method for Administrators to see all platform users
         [HttpGet("Toti")]
         [Authorize]
         public async Task<IActionResult> GetTotiUtilizatorii()
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
-            if (GetRolCurent() != "Admin")
-            {
-                return Forbid();
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
+            if (GetRolCurent() != "Admin") return Forbid();
+
             try
             {
                 var listaUtilizatori = new List<object>();
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Creates a concatenated string with all roles (since a user can be both Client and Freelancer, for example)
                     string sql = @"SELECT u.id_utilizator, u.nume, u.email, u.telefon, CONCAT_WS(', ', CASE WHEN c.id_utilizator IS NOT NULL THEN 'Client' ELSE NULL END,
                     CASE WHEN f.id_utilizator IS NOT NULL THEN 'Freelancer' ELSE NULL END,
                     CASE WHEN e.id_utilizator IS NOT NULL THEN 'Expert Legal' ELSE NULL END,
@@ -665,28 +695,25 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Exclusive method for Administrators to completely delete a user's account
         [HttpDelete("sterge/{id}")]
         [Authorize]
         public async Task<IActionResult> StergeUtilizator(int id)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
-            if (GetRolCurent() != "Admin")
-            {
-                return Forbid();
-            }
-            if (idUserCurent.Value == id)
-            {
-                return BadRequest("Nu îți poți șterge propriul cont de administrator.");
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
+            if (GetRolCurent() != "Admin") return Forbid();
+
+            if (idUserCurent.Value == id) return BadRequest("Nu îți poți șterge propriul cont de administrator.");
+
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // Protects all Admin accounts from accidental or malicious deletion
                     string checkAdmin = "SELECT COUNT(*) FROM \"ADMIN\" WHERE id_utilizator = @id";
                     using (var cmdCheck = new NpgsqlCommand(checkAdmin, connection))
                     {
@@ -721,23 +748,18 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
+        // Exclusive method for Administrators to delete a single profile (e.g., revokes someone's right to be a Freelancer)
         [HttpDelete("sterge-rol/{idUtilizator}/{rol}")]
         [Authorize]
         public async Task<IActionResult> StergeRol(int idUtilizator, string rol)
         {
             var idUserCurent = GetIdUtilizatorCurent();
-            if (idUserCurent == null)
-            {
-                return Unauthorized(new { eroare = "Token invalid." });
-            }
-            if (GetRolCurent() != "Admin")
-            {
-                return Forbid();
-            }
-            if (idUserCurent.Value == idUtilizator)
-            {
-                return BadRequest("Nu îți poți șterge propriile roluri.");
-            }
+            if (idUserCurent == null) return Unauthorized(new { eroare = "Token invalid." });
+
+            if (GetRolCurent() != "Admin") return Forbid();
+
+            if (idUserCurent.Value == idUtilizator) return BadRequest("Nu îți poți șterge propriile roluri.");
+
             var tabele = new Dictionary<string, string>
             {
                 {"Client", "CLIENT"},
@@ -748,9 +770,12 @@ namespace FreelancerApp.Server.Controllers
             {
                 return BadRequest("Rol invalid sau rolul de admin nu poate fi șters.");
             }
+
             string tabel = tabele[rol];
             using var connection = new NpgsqlConnection(_connectionString);
             await connection.OpenAsync();
+
+            // Strict checks for the Legal Expert role - Cannot be deleted if their decisions impacted the system
             if (rol == "Expert Legal")
             {
                 string checkDispute = @"SELECT COUNT(*) FROM ""DISPUTA"" d
@@ -765,6 +790,7 @@ namespace FreelancerApp.Server.Controllers
                         return BadRequest("Rolul de Expert legal nu poate fi șters deoarece expertul a soluționat dispute în sistem.");
                     }
                 }
+
                 string checkValidari = @"SELECT COUNT(*) FROM ""VALIDARE"" v
             JOIN ""EXPERT_LEGAL"" e ON v.id_expert = e.id_expert
             WHERE e.id_utilizator = @id";
@@ -778,6 +804,7 @@ namespace FreelancerApp.Server.Controllers
                     }
                 }
             }
+
             string sql = $"DELETE FROM \"{tabel}\" WHERE id_utilizator = @id";
             using var cmd = new NpgsqlCommand(sql, connection);
             cmd.Parameters.AddWithValue("@id", idUtilizator);
