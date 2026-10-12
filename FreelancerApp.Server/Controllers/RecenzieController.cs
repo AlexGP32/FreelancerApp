@@ -20,7 +20,6 @@ namespace FreelancerApp.Server.Controllers
             _connectionString = configuration.GetConnectionString("LicentaBaza");
         }
 
-        // Extracts the user ID from the JWT token (sent in the Authorization header)
         private int? GetIdUtilizatorCurent()
         {
             var claim = User.FindFirst("id");
@@ -31,7 +30,6 @@ namespace FreelancerApp.Server.Controllers
             return id;
         }
 
-        // Allows a client or freelancer to add a review upon job completion
         [HttpPost]
         [Authorize]
         public async Task<IActionResult> AdaugaRecenzie([FromBody] RecenzieRequest request)
@@ -42,7 +40,6 @@ namespace FreelancerApp.Server.Controllers
                 return Unauthorized(new { eroare = "Token invalid." });
             }
 
-            // Simple validation for the rating (stars)
             if (request.Nota < 1 || request.Nota > 5)
             {
                 return BadRequest(new { eroare = "Nota trebuie să fie între 1 și 5." });
@@ -59,7 +56,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // 1. Checks if the job exists and retrieves the involved users' IDs (freelancer and client)
                     string sqlVerificare = @"
                         SELECT f.id_utilizator AS id_user_freelancer, c.id_utilizator AS id_user_client
                         FROM ""ANGAJARE"" a
@@ -82,7 +78,7 @@ namespace FreelancerApp.Server.Controllers
                             int idUserFreelancer = reader.GetInt32(reader.GetOrdinal("id_user_freelancer"));
                             int idUserClient = reader.GetInt32(reader.GetOrdinal("id_user_client"));
 
-                            // Verifies if the person submitting the review is actually involved in this contract
+                            // Verifies if the person submitting the review is legally involved in this contract
                             if (request.TipAutor == "Freelancer" && idUserCurent.Value != idUserFreelancer)
                             {
                                 return Forbid();
@@ -95,7 +91,7 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    // 2. Prevents adding multiple reviews for the same job by the same party
+                    // Prevents duplicate reviews for the same job by the same party
                     string sqlCheck = @"SELECT COUNT(*)
                     FROM ""RECENZIE""
                     WHERE id_angajare = @idAngajare AND tip_autor = @tipAutor";
@@ -111,7 +107,6 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    // 3. Inserts the review into the database
                     string sqlInsert = @"INSERT INTO ""RECENZIE"" (id_angajare, tip_autor, nota, comentariu, data)
                     VALUES (@idAngajare, @tipAutor, @nota, @comentariu, CURRENT_TIMESTAMP)";
 
@@ -132,7 +127,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Returns all reviews received by a Freelancer (written by clients)
         [HttpGet("freelancer/{idFreelancer}")]
         public async Task<IActionResult> GetRecenziiFreelancer(int idFreelancer)
         {
@@ -144,7 +138,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // Extracts the detailed list of reviews
                     string sqlRecenzii = @"SELECT r.id_recenzie, r.nota, r.comentariu, r.data
                     FROM ""RECENZIE"" r
                     JOIN ""ANGAJARE"" a ON r.id_angajare = a.id_angajare
@@ -169,7 +162,6 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    // Calculates the average rating only if reviews exist
                     if (recenzii.Count > 0)
                     {
                         string sqlMedie = @"SELECT ROUND(AVG(r.nota), 1)
@@ -195,7 +187,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Returns all reviews received by a Client (written by freelancers)
         [HttpGet("client/{idClient}")]
         public async Task<IActionResult> GetRecenziiClient(int idClient)
         {

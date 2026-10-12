@@ -3,12 +3,9 @@ import Swal from 'sweetalert2'
 import '../CSS/Inregistrare-Logare.css'
 import { useNavigate } from 'react-router-dom'
 
-// Component for user registration, handling multiple user roles 
-// (Client, Freelancer, ExpertLegal, Admin) with role-specific validations.
 export default function Inregistrare() {
     const navigate = useNavigate()
 
-    // Route guard: If the user is already logged in, redirect them to the dashboard
     useEffect(() => {
         const utilizator = localStorage.getItem('utilizatorLogat')
         if (utilizator) {
@@ -16,11 +13,7 @@ export default function Inregistrare() {
         }
     }, [navigate])
 
-    // --- Form State ---
-    // Main role selection
     const [rol, setRol] = useState('Client')
-    
-    // Common fields for all users
     const [nume, setNume] = useState('')
     const [email, setEmail] = useState('')
     const [parola, setParola] = useState('')
@@ -31,17 +24,14 @@ export default function Inregistrare() {
     const [strada, setStrada] = useState('')
     const [numar, setNumar] = useState('')
 
-    // Role-specific fields
-    const [cnpCui, setCnpCui] = useState('') // Client
-    const [iban, setIban] = useState('') // Freelancer
-    const [profesie, setProfesie] = useState('') // Freelancer
-    const [departament, setDepartament] = useState('') // ExpertLegal
-    const [codLegitimatie, setCodLegitimatie] = useState('') // ExpertLegal
-    const [codAdmin, setCodAdmin] = useState('') // Admin
+    const [cnpCui, setCnpCui] = useState('') 
+    const [iban, setIban] = useState('') 
+    const [profesie, setProfesie] = useState('') 
+    const [departament, setDepartament] = useState('') 
+    const [codLegitimatie, setCodLegitimatie] = useState('') 
+    const [codAdmin, setCodAdmin] = useState('') 
 
-    // Complex validation function for all fields and specific mathematical checks (CNP, CUI, IBAN)
     const valideazaFormular = () => {
-        // 1. Check for empty common fields
         if (
             !judet ||
             !oras ||
@@ -54,7 +44,6 @@ export default function Inregistrare() {
             return 'Toate câmpurile trebuie să fie completate !'
         }
 
-        // 2. Validate Name
         if (nume.length < 3) {
             return 'Numele trebuie să conțină minim 3 caractere.'
         }
@@ -63,13 +52,11 @@ export default function Inregistrare() {
             return 'Nume invalid! Folosește doar litere.'
         }
 
-        // 3. Validate Email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(email)) {
             return "Email invalid ! Formatul adecvat este 'nume@domeniu.com'"
         }
 
-        // 4. Validate Password (min 6 chars, at least 1 letter and 1 number)
         const parolaRegex = /^(?=.*[a-zA-Z])(?=.*\d).{6,}$/
         if (!parolaRegex.test(parola)) {
             return 'Parola trebuie să aibă un minim de 6 caractere, conținând cel puțin o literă și o cifră.'
@@ -78,17 +65,15 @@ export default function Inregistrare() {
             return 'Parolele nu coincid'
         }
 
-        // 5. Validate Romanian Phone Number format
         const telefonRegex = /^07\d{8}$/
         if (!telefonRegex.test(telefon)) {
             return "Telefon invalid ! Trebuie sa inceapă cu prefixul '07' și să aibe lungimea de 10 cifre."
         }
 
-        // 6. Role-Specific Validations
         if (rol === 'Client') {
             const valoare = cnpCui.trim().toUpperCase()
 
-            // Mathematical validation for Romanian CNP (Modulo 11 algorithm)
+            // CNP Validation Algorithm (Modulo 11)
             const validareCNP = (cnpText) => {
                 if (cnpText.length !== 13 || !/^[1-9]\d{12}$/.test(cnpText)) {
                     return false
@@ -104,8 +89,8 @@ export default function Inregistrare() {
                 return cifraControlCalculata === cifraControlReala
             }
 
-            // Mathematical validation for Romanian CUI (Modulo 11 algorithm with specific weights)
-            const validareCUI = (cuiText) => {
+                // CUI Validation Algorithm (Modulo 11)            
+                const validareCUI = (cuiText) => {
                 let curatat = cuiText.replace(/^RO/i, '')
                 if (!/^\d{2,10}$/.test(curatat)) {
                     return false
@@ -127,20 +112,18 @@ export default function Inregistrare() {
                 return cifraControlCalculata === cifraControlReala
             }
 
-            // Accept either a valid CNP (individual) or CUI (company)
             if (!validareCNP(valoare) && !validareCUI(valoare)) {
                 return 'CUI-ul sau CNP-ul introdus este invalid (cifra de control nu corespunde).'
             }
         }
 
         if (rol === 'Freelancer') {
-            // Standard mathematical validation for IBAN (Modulo 97 algorithm)
-            const validareIBAN = (ibanText) => {
+                // IBAN Validation Algorithm (Modulo 97)            
+                const validareIBAN = (ibanText) => {
                 let iban = ibanText.replace(/\s+/g, '').toUpperCase()
                 if (!/^RO\d{2}[A-Z0-9]{20}$/.test(iban)) {
                     return false
                 }
-                // Move first 4 chars to the end, then convert letters to numbers (A=10, B=11, etc.)
                 let rearanjat = iban.substring(4) + iban.substring(0, 4)
                 let numericIban = ''
                 for (let i = 0; i < rearanjat.length; i++) {
@@ -151,7 +134,6 @@ export default function Inregistrare() {
                         numericIban += rearanjat.charAt(i)
                     }
                 }
-                // Use BigInt due to the length of the numeric IBAN string
                 let rest = BigInt(numericIban) % 97n
                 return rest === 1n
             }
@@ -177,14 +159,12 @@ export default function Inregistrare() {
             }
         }
 
-        return null // No errors found
+        return null 
     }
 
-    // Handle form submission
     const handleSubmit = async (e) => {
         e.preventDefault()
         
-        // Run validations first
         const eroare = valideazaFormular()
         if (eroare) {
             Swal.fire({
@@ -196,7 +176,6 @@ export default function Inregistrare() {
             return
         }
 
-        // Build the base payload common to all user roles
         let dateUtilizator = {
             nume,
             email,
@@ -209,14 +188,13 @@ export default function Inregistrare() {
         }
         let linkApi = ''
 
-        // Append specific data and set endpoint depending on selected role
         if (rol === 'Client') {
             dateUtilizator = { ...dateUtilizator, cnpCui: cnpCui.toUpperCase() }
             linkApi = 'http://localhost:5129/api/Utilizator/inregistrare-client'
         } else if (rol === 'Freelancer') {
             dateUtilizator = {
                 ...dateUtilizator,
-                iban: iban.replace(/\s/g, '').toUpperCase(), // Clean up spacing
+                iban: iban.replace(/\s/g, '').toUpperCase(), 
                 profesie,
             }
             linkApi =
@@ -234,7 +212,6 @@ export default function Inregistrare() {
         }
 
         try {
-            // Submit data as JSON
             const raspuns = await fetch(linkApi, {
                 method: 'POST',
                 headers: {
@@ -250,10 +227,9 @@ export default function Inregistrare() {
                     text: 'Înregistrare realizată cu succes!',
                     confirmButtonColor: 'green',
                 })
-                // Go to login after successful creation
                 navigate('/autentificare')
             } else {
-                // Backend returns error messages as plain text if request fails
+                // The error (e.g., email already exists) comes as plain text from our API, not as JSON.                 
                 const textEroare = await raspuns.text()
                 Swal.fire({
                     icon: 'error',
@@ -263,7 +239,6 @@ export default function Inregistrare() {
                 })
             }
         } catch (err) {
-            // Catch network-level errors (server offline, etc.)
             console.error(err)
             Swal.fire({
                 icon: 'warning',
@@ -275,11 +250,10 @@ export default function Inregistrare() {
 
     return (
         <div className="register-container">
-            {/* noValidate disables default browser HTML5 tooltips so Swal takes over validation display */}
+            {/* noValidate disables the browser's built-in validation (tooltips); we will use only Swal pop-ups */}
             <form className="register-form" onSubmit={handleSubmit} noValidate>
                 <h2> Creare cont nou</h2>
                 
-                {/* Role Selector */}
                 <label className="role-label">
                     Alege tipul de cont.
                     <select
@@ -294,7 +268,6 @@ export default function Inregistrare() {
                     </select>
                 </label>
 
-                {/* Common Fields */}
                 <label>
                     <span>
                         Județ: <span className="required"> * </span>
@@ -400,7 +373,6 @@ export default function Inregistrare() {
                     />
                 </label>
 
-                {/* Role-Specific Field: Client */}
                 {rol === 'Client' && (
                     <label>
                         <span>
@@ -422,7 +394,6 @@ export default function Inregistrare() {
                     </label>
                 )}
 
-                {/* Role-Specific Fields: Freelancer */}
                 {rol === 'Freelancer' && (
                     <>
                         <label>
@@ -457,7 +428,6 @@ export default function Inregistrare() {
                     </>
                 )}
 
-                {/* Role-Specific Fields: ExpertLegal */}
                 {rol === 'ExpertLegal' && (
                     <>
                         <label>
@@ -489,7 +459,6 @@ export default function Inregistrare() {
                     </>
                 )}
 
-                {/* Role-Specific Field: Admin */}
                 {rol === 'Admin' && (
                     <label>
                         <span>

@@ -1,28 +1,22 @@
-/* ===== Global layout ===== */
-
 /* Make the app fill the full viewport height */
 html, body, #root {
     height: 100%;
     margin: 0;
 }
 
-/* SweetAlert2 adds height: auto to body when a popup opens; !important overrides it
-   so the page layout doesn't jump while the popup is shown */
+/* SweetAlert2 adds height: auto to the body element when a popup opens; !important overrides it
+   so the underlying page layout doesn't jump or resize while the popup is shown */
 body.swal2-height-auto.swal2-shown {
     height: 100% !important;
 }
 
 
-/* ===== Dashboard: container and header ===== */
-
-/* Centered content column */
 .panou-container {
     max-width: 860px;
     margin: 0 auto;
     padding: 2rem;
 }
 
-/* Title + action buttons on one row; wraps on narrow screens */
 .panou-header {
     display: flex;
     flex-wrap: wrap;
@@ -31,7 +25,7 @@ body.swal2-height-auto.swal2-shown {
     margin-bottom: 1rem;
 }
 
-/* flex: 1 pushes the buttons to the right edge */
+/* flex: 1 pushes the sibling buttons to the right edge */
 .panou-header-titlu {
     flex: 1;
     margin: 0;
@@ -39,7 +33,7 @@ body.swal2-height-auto.swal2-shown {
     color: #1a1a2e;
 }
 
-/* width: 100% forces the role text onto its own line below the title */
+/* width: 100% forces the role text onto its own line directly below the title */
 .panou-header-rol {
     width: 100%;
     margin: 0;
@@ -48,9 +42,6 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Header buttons ===== */
-
-/* Red = destructive/exit action */
 .btn-logout {
     padding: 5px 12px;
     cursor: pointer;
@@ -66,7 +57,6 @@ body.swal2-height-auto.swal2-shown {
     border-color: #c53030;
 }
 
-/* Neutral grey outline buttons (settings, switch role) */
 .btn-setari {
     padding: 5px 12px;
     cursor: pointer;
@@ -94,8 +84,6 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Client dashboard: sections and titles ===== */
-
 .panou-client-container {
     display: flex;
     flex-direction: column;
@@ -115,9 +103,6 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Add-project form ===== */
-
-/* Card that contains the whole form */
 .form-adaugare-proiect {
     display: flex;
     flex-direction: column;
@@ -129,8 +114,8 @@ body.swal2-height-auto.swal2-shown {
     background: #fff;
 }
 
-/* Label wraps its field; flex-wrap + flex-basis: 100% on the field
-   puts the input on its own line under the label text */
+/* Label wraps its field; combining flex-wrap on the label with flex-basis: 100% on the field
+   forces the input to sit on its own line beneath the label text */
 .form-label {
     display: flex;
     flex-wrap: wrap;
@@ -150,7 +135,6 @@ body.swal2-height-auto.swal2-shown {
     flex-basis: 100%;
 }
 
-/* Blue border replaces the default browser outline on focus */
 .form-input:focus {
     outline: none;
     border-color: #558ee3;
@@ -173,9 +157,6 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Activities block (inside the add-project form) ===== */
-
-/* Light grey box that groups the activity inputs */
 .form-activități {
     border: 1.5px solid #ddd;
     border-radius: 8px;
@@ -198,21 +179,18 @@ body.swal2-height-auto.swal2-shown {
     gap: 0.75rem;
 }
 
-/* Fields of one activity side by side; wrap when there isn't enough room */
 .form-activitate-rand {
     display: flex;
     gap: 1rem;
     flex-wrap: wrap;
 }
 
-/* min-width: 140px so fields wrap instead of getting too narrow */
+/* min-width ensures fields wrap to a new line gracefully instead of becoming unusably narrow */
 .form-activitate-rand .form-label {
     flex: 1;
     min-width: 140px;
 }
 
-
-/* ===== List of added activities ===== */
 
 .lista-activitati-adauagate {
     display: flex;
@@ -226,7 +204,6 @@ body.swal2-height-auto.swal2-shown {
     color: rgb(93, 88, 98);
 }
 
-/* Remove default bullets */
 .lista-activitati-ul {
     list-style: none;
     padding: 0;
@@ -236,7 +213,6 @@ body.swal2-height-auto.swal2-shown {
     gap: 0.4rem;
 }
 
-/* One row: activity text on the left, delete button on the right */
 .activitate-item {
     display: flex;
     align-items: center;
@@ -250,9 +226,7 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Action buttons ===== */
 
-/* Main submit button: full width, solid blue */
 .btn-trimite {
     width: 100%;
     padding: 8px;
@@ -269,7 +243,7 @@ body.swal2-height-auto.swal2-shown {
     background: #285e9b;
 }
 
-/* Green = add; align-self: flex-start keeps the button at its natural width */
+/* align-self: flex-start prevents the button from stretching to fill the container's height/width */
 .btn-adauga-activitate {
     padding: 6px 12px;
     cursor: pointer;
@@ -286,7 +260,7 @@ body.swal2-height-auto.swal2-shown {
     background: #276749;
 }
 
-/* Small red outline button; white-space: nowrap keeps the label on one line */
+/* white-space: nowrap prevents the label text from wrapping onto a second line */
 .btn-sterge-activitate {
     padding: 3px 8px;
     cursor: pointer;
@@ -302,7 +276,6 @@ body.swal2-height-auto.swal2-shown {
     background: #fff5f5;
 }
 
-/* Blue = positive action (release payment) */
 .btn-elibereaza {
     padding: 6px 12px;
     cursor: pointer;
@@ -319,7 +292,6 @@ body.swal2-height-auto.swal2-shown {
     background: #285e9b;
 }
 
-/* Solid red = destructive/negative actions (dispute, delete project) */
 .btn-disputa {
     padding: 6px 12px;
     cursor: pointer;
@@ -352,7 +324,6 @@ body.swal2-height-auto.swal2-shown {
     background: #c53030;
 }
 
-/* Neutral grey outline = secondary action (review) */
 .btn-recenzie {
     padding: 6px 12px;
     cursor: pointer;
@@ -368,7 +339,6 @@ body.swal2-height-auto.swal2-shown {
     background: #f0f0f0;
 }
 
-/* Red outline = softer negative action (reject offer) */
 .btn-respinge-oferta {
     padding: 6px 12px;
     cursor: pointer;
@@ -386,9 +356,7 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Lists and cards (projects, offers, evaluation, completed) ===== */
 
-/* The four lists share the same layout: no bullets, vertical stack */
 .lista-evaluare,
 .lista-finalizate,
 .lista-oferte,
@@ -401,7 +369,6 @@ body.swal2-height-auto.swal2-shown {
     gap: 1rem;
 }
 
-/* The four card types share the same look */
 .card-evaluare,
 .card-finalizat,
 .card-oferta,
@@ -423,8 +390,6 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Dispute form ===== */
-
 .disputa-container {
     display: flex;
     flex-direction: column;
@@ -432,7 +397,7 @@ body.swal2-height-auto.swal2-shown {
     margin-top: 0.25rem;
 }
 
-/* 99% instead of 100% so the textarea doesn't overflow its container */
+/* 99% instead of 100% prevents the textarea from slightly overflowing the padding of its parent container */
 .disputa-textarea {
     width: 99%;
     border: 1.5px solid #ccc;
@@ -447,7 +412,6 @@ body.swal2-height-auto.swal2-shown {
     border-color: #558ee3;
 }
 
-/* Row of buttons on a completed project; wraps on narrow screens */
 .butoane-finalizat {
     display: flex;
     gap: 0.5rem;
@@ -456,9 +420,7 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Empty state and small helpers ===== */
 
-/* Message shown when a section has no items */
 .sectiune-goala {
     padding: 1rem;
     border: 1.5px solid #ddd;
@@ -468,7 +430,6 @@ body.swal2-height-auto.swal2-shown {
     font-size: 0.9rem;
 }
 
-/* Red asterisk for required fields */
 .required {
     color: red;
     font-weight: bold;
@@ -476,9 +437,7 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Responsive: small screens ===== */
 
-/* Tighter padding, header stacked vertically, activity fields one per row */
 @media (max-width: 600px) {
     .panou-container {
         padding: 1rem;
@@ -499,19 +458,15 @@ body.swal2-height-auto.swal2-shown {
 }
 
 
-/* ===== Notes field, review date, back button ===== */
-
 .camp-observatii{
     margin-top: 0.75rem;
 }
 
-/* Muted small text for the review date */
 .data-recenzie{
     color: rgb(93, 88, 98);
     font-size: 0.85rem;
 }
 
-/* Neutral grey outline button for going back */
 .btn-inapoi{
     padding: 6px 12px;
     cursor: pointer;

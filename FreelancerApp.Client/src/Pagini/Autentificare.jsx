@@ -3,7 +3,6 @@ import Swal from 'sweetalert2'
 import '../CSS/Inregistrare-Logare.css'
 import { useNavigate } from 'react-router-dom'
 
-// Small helper to show a SweetAlert2 popup (returns a promise, so callers can await it)
 const Alerta = (icon, title, text) => {
     return Swal.fire({
         icon: icon,
@@ -12,13 +11,9 @@ const Alerta = (icon, title, text) => {
     })
 }
 
-// Two-step login form:
-//   step 1 -> choose account type and enter the identifier (name / email / CNP / ...)
-//   step 2 -> enter the password and submit to the API
 export default function Autentificare() {
     const navigate = useNavigate()
 
-    // If the user is already logged in, skip the login page and go to the dashboard
     useEffect(() => {
         const utilizator = localStorage.getItem('utilizatorLogat')
         if (utilizator) {
@@ -26,13 +21,11 @@ export default function Autentificare() {
         }
     }, [navigate])
 
-    const [pas, setPas] = useState(1) // current step: 1 or 2
-    const [rol, setRol] = useState('Client') // selected account type
+    const [pas, setPas] = useState(1)
+    const [rol, setRol] = useState('Client')
     const [identificator, setIdentificator] = useState('')
     const [parola, setParola] = useState('')
 
-    // Step 1 -> step 2: only checks that the identifier is not empty.
-    // The real validation (does the user exist?) happens on the server at submit.
     const handleUrmatorul = async (e) => {
         e.preventDefault()
         if (!identificator.trim()) {
@@ -46,7 +39,6 @@ export default function Autentificare() {
         setPas(2)
     }
 
-    // Step 2: send credentials to the backend and store the session on success
     const handleSubmit = async (e) => {
         e.preventDefault()
         if (!parola.trim()) {
@@ -70,14 +62,11 @@ export default function Autentificare() {
             )
             if (raspuns.ok) {
                 const dateUtilizator = await raspuns.json()
-                // Token is stored separately so API calls can read it easily;
-                // the full user object is kept for displaying name/role in the UI
                 localStorage.setItem('token', dateUtilizator.token)
                 localStorage.setItem(
                     'utilizatorLogat',
                     JSON.stringify(dateUtilizator)
                 )
-                // Wait for the user to close the popup before redirecting
                 await Alerta(
                     'success',
                     `Salut ${dateUtilizator.nume}!`,
@@ -85,12 +74,11 @@ export default function Autentificare() {
                 )
                 navigate('/panou')
             } else {
-                // The server returns the error message as plain text (e.g. wrong password)
+                // Returns the error message as plain text (Ex: wrong password, account does not exist)
                 const textEroare = await raspuns.text()
                 Alerta('error', 'Eroare', textEroare)
             }
         } catch (error) {
-            // Network failure: server down or unreachable
             console.error(error)
             Alerta(
                 'error',
@@ -100,8 +88,6 @@ export default function Autentificare() {
         }
     }
 
-    // Each account type can log in with a different set of identifiers,
-    // so the label changes with the selected role
     const getLabelIdentificator = () => {
         if (rol === 'Client') {
             return 'Nume, Email, CNP sau CUI:'
@@ -117,8 +103,6 @@ export default function Autentificare() {
         }
     }
 
-    // One onSubmit handler for both steps: Enter key and the submit button
-    // run the logic of whichever step is currently shown
     const proceseazaFormular = (e) => {
         if (pas === 1) {
             handleUrmatorul(e)
@@ -129,8 +113,7 @@ export default function Autentificare() {
 
     return (
         <div className="register-container">
-            {/* noValidate disables the browser's built-in validation;
-                we validate manually and show SweetAlert popups instead */}
+            {/* noValidate disables the browser's built-in validation (tooltips); we will use exclusively Swal pop-ups. */}
             <form
                 className="register-form"
                 onSubmit={proceseazaFormular}
@@ -138,7 +121,6 @@ export default function Autentificare() {
             >
                 <h2>Autentificare</h2>
 
-                {/* ===== Step 1: account type + identifier ===== */}
                 {pas === 1 && (
                     <>
                         <label>
@@ -172,7 +154,6 @@ export default function Autentificare() {
                             />
                         </label>
                         <button type="submit"> Următorul </button>
-                        {/* type="button" so it doesn't submit the form; goes to the register page */}
                         <button
                             type="button"
                             onClick={() => navigate('/inregistrare')}
@@ -182,10 +163,8 @@ export default function Autentificare() {
                     </>
                 )}
 
-                {/* ===== Step 2: password ===== */}
                 {pas === 2 && (
                     <>
-                        {/* Recap of what was entered in step 1 */}
                         <div className="logare-info">
                             Logare pentru: <br />
                             <strong> ({identificator})</strong> <br />
@@ -204,7 +183,6 @@ export default function Autentificare() {
                             />
                         </label>
                         <div className="logare-butoane">
-                            {/* Back to step 1 (does not leave the page) */}
                             <button type="button" onClick={() => setPas(1)}>
                                 Înapoi
                             </button>

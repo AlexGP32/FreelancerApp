@@ -19,14 +19,14 @@ namespace FreelancerApp.Server.Controllers
     [ApiController]
     public class ProiecteController : ControllerBase
     {
-        private readonly string _connectionString = string.Empty;
+        private readonly string _connectionString = string.empty;
         private readonly EmbeddingService _embeddingService;
         private readonly IWebHostEnvironment _env;
 
         public ProiecteController(IConfiguration configuration, EmbeddingService embeddingService, IWebHostEnvironment env)
         {
             _connectionString = configuration.GetConnectionString("LicentaBaza");
-            _embeddingService = embeddingService; // Integrated service querying an AI model (BERT/Llama etc.) for textual vectors.
+            _embeddingService = embeddingService;
             _env = env;
         }
 
@@ -40,7 +40,6 @@ namespace FreelancerApp.Server.Controllers
             return id;
         }
 
-        // Inserts a new project formulated by a Client, which can encompass multiple "Activities" (Sub-tasks)
         [HttpPost("adauga")]
         [Authorize]
         public async Task<IActionResult> AdaugaProiect([FromBody] AdaugaProiectRequest cerere)
@@ -88,7 +87,6 @@ namespace FreelancerApp.Server.Controllers
                                 foreach (var activitate in cerere.Activitati)
                                 {
                                     int idCategorieFinal = 0;
-                                    // If the new category typed by the client does not exist in the DB, it is automatically added.
                                     string sqlCautaCategorie = @"SELECT id_categorie FROM ""CATEGORIE"" WHERE LOWER(denumire) = LOWER(@denumire)";
                                     using (var cmdCauta = new NpgsqlCommand(sqlCautaCategorie, connection, transaction))
                                     {
@@ -146,7 +144,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Returns the projects created by the currently logged-in user
         [HttpGet("client")]
         [Authorize]
         public async Task<IActionResult> GetProiecteClient()
@@ -207,7 +204,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Helper used by the frontend when a Client opens an UPDATE request; returns all old Activities to populate inputs.
         [HttpGet("{idProiect}/activitati")]
         [Authorize]
         public async Task<IActionResult> GetActivitatiProiectPentruEditare(int idProiect)
@@ -261,7 +257,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Endpoint where the client updates the data of a project already online
         [HttpPut("editeaza/{idProiect}")]
         [Authorize]
         public async Task<IActionResult> EditeazaProiect(int idProiect, [FromBody] AdaugaProiectRequest cerere)
@@ -300,8 +295,6 @@ namespace FreelancerApp.Server.Controllers
                                 await command.ExecuteNonQueryAsync();
                             }
 
-                            // Somewhat abrupt approach: completely wipe old activities and re-insert them... 
-                            // useful if user deleted 3 out of 4 on the frontend.
                             string sqlStergeActivitati = @"DELETE FROM ""ACTIVITATE"" WHERE id_proiect = @idProiect";
                             using (var cmdDel = new NpgsqlCommand(sqlStergeActivitati, connection, transaction))
                             {
@@ -334,7 +327,6 @@ namespace FreelancerApp.Server.Controllers
                                         }
                                     }
 
-                                    // Regenerate embeddings and add them sequentially as new IDs
                                     string textPentruEmbedding = $"{activitate.TitluActivitate} {activitate.Descriere} {activitate.NumeCategorie}";
                                     float[] embedding = await _embeddingService.GetEmbeddingAsync(textPentruEmbedding);
                                     string vectorString = "[" + string.Join(",", embedding.Select(f => f.ToString(System.Globalization.CultureInfo.InvariantCulture))) + "]";
@@ -371,7 +363,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Shows platform Activities. Deprecated method with the implementation of the Machine Learning system returning the "recomandate" route.
         [HttpGet("activitati-disponibile")]
         [Authorize]
         public async Task<IActionResult> GetActivitatiDisponibile()
@@ -428,7 +419,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Allows a client to withdraw a project
         [HttpDelete("{idProiect}")]
         [Authorize]
         public async Task<IActionResult> StergeProiect(int idProiect)
@@ -490,7 +480,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Main endpoint feeding the Freelancer dashboard with personalized job offers
         [HttpGet("recomandate")]
         [Authorize]
         public async Task<IActionResult> GetActivitatiRecomandate()
@@ -505,7 +494,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // 1. Gets the AI profile vector generated when the account was created (based on profession)
                     string sqlEmbedding = @"SELECT f.embedding::text FROM ""FREELANCER"" f WHERE f.id_utilizator = @idUtilizator";
                     string? freelancerEmbedding = null;
 
@@ -563,7 +551,7 @@ namespace FreelancerApp.Server.Controllers
                                     Categorie = reader.GetString(4),
                                     TitluProiect = reader.GetString(5),
                                     Buget = reader.IsDBNull(6) ? 0 : reader.GetDecimal(6),
-                                    Similaritate = reader.GetDouble(7), // Transmitted to the UI as a % percentage
+                                    Similaritate = reader.GetDouble(7),
                                     FisierDocumentatie = reader.IsDBNull(8) ? null : reader.GetString(8)
                                 });
                             }
@@ -578,7 +566,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Endpoint for the Client to attach PDF or docx sketches to the desired activity.
         [HttpPost("activitate/{idActivitate}/documentatie")]
         [Authorize]
         public async Task<IActionResult> UploadDocumentatie(int idActivitate, [FromForm] IFormFile fisier)
@@ -639,8 +626,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Extracts only the IDs of a newly generated activity. Used on the frontend right after project creation 
-        // to query the preceding UploadDocumentatie endpoint for each individual ID.
         [HttpGet("{idProiect}/activitati-cu-id")]
         [Authorize]
         public async Task<IActionResult> GetActivitatiCuId(int idProiect)

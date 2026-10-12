@@ -2,18 +2,15 @@ import { useEffect, useState } from 'react'
 import Swal from 'sweetalert2'
 import { GetAuthHeaders } from '../TokenHeaders'
 
-// Admin dashboard component for managing platform users.
-// Allows the admin to view all users, delete accounts entirely, or remove specific roles.
 export default function PanouAdmin({ utilizator }) {
-    const [utilizatori, setUtilizatori] = useState([]) // State to store the list of users
+    const [utilizatori, setUtilizatori] = useState([]) 
 
-    // Fetches the complete list of users from the backend
     const incarcaUtilizatori = async () => {
         try {
             const res = await fetch(
                 'http://localhost:5129/api/Utilizator/toti',
                 {
-                    headers: GetAuthHeaders(), // Includes the JWT token for authorization
+                    headers: GetAuthHeaders(), 
                 }
             )
             if (res.ok) {
@@ -25,14 +22,11 @@ export default function PanouAdmin({ utilizator }) {
         }
     }
 
-    // Trigger the fetch operation when the component first mounts
     useEffect(() => {
         incarcaUtilizatori()
     }, [])
 
-    // Handles the complete deletion of a user account
     const handleStergeUtilizator = async (id, nume) => {
-        // Ask for confirmation before performing a destructive action
         const result = await Swal.fire({
             title: `Ștergi utilizatorul ${nume}?`,
             text: 'Această acțiune este ireversabilă!',
@@ -60,7 +54,6 @@ export default function PanouAdmin({ utilizator }) {
                     'Utilizatorul a fost șters cu succes.',
                     'success'
                 )
-                // Update the UI immediately by filtering out the deleted user to avoid an extra API call
                 setUtilizatori(utilizatori.filter((u) => u.idUser !== id))
             } else {
                 const errorText = await response.text()
@@ -71,7 +64,6 @@ export default function PanouAdmin({ utilizator }) {
         }
     }
 
-    // Handles the removal of a specific role from a user (e.g., revoking 'Freelancer' access)
     const handleStergeRol = async (id, nume, rol) => {
         const result = await Swal.fire({
             title: `Ștergi rolul ${rol} al lui ${nume}?`,
@@ -96,7 +88,6 @@ export default function PanouAdmin({ utilizator }) {
             )
             if (response.ok) {
                 Swal.fire('Șters.', `Rolul ${rol} a fost șters.`, 'success')
-                // Refetch the users to ensure the UI reflects the updated roles accurately
                 incarcaUtilizatori()
             } else {
                 const errorText = await response.text()
@@ -147,8 +138,7 @@ export default function PanouAdmin({ utilizator }) {
                                             Șterge utilizator
                                         </button>
 
-                                        {/* Render a delete button for each role the user has, EXCEPT the Admin role.
-                                            This prevents administrators from accidentally demoting themselves or other admins. */}
+                                        {/* Prevents administrators from accidentally demoting themselves or other admins. */}
                                         {u.roluri &&
                                             u.roluri
                                                 .split(', ')

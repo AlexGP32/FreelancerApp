@@ -12,7 +12,7 @@ namespace FreelancerApp.Server.Controllers
     [ApiController]
     public class CertificatController : ControllerBase
     {
-        private readonly string _connectionString = string.Empty;
+        private readonly string _connectionString = string.empty;
         private readonly IWebHostEnvironment _env;
 
         public CertificatController(IConfiguration configuration, IWebHostEnvironment env)
@@ -36,7 +36,6 @@ namespace FreelancerApp.Server.Controllers
             return User.FindFirst("rol")?.Value;
         }
 
-        // Asynchronous endpoint that receives a document from a Freelancer
         [HttpPost("adauga")]
         public async Task<IActionResult> AdaugaCertificat([FromForm] AdaugaCertificatRequest cerere)
         {
@@ -50,7 +49,6 @@ namespace FreelancerApp.Server.Controllers
                     return BadRequest(new { eroare = "Nu a fost încărcat niciun fișier valid." });
                 }
 
-                // Ensuring the directory system is functional
                 string uploadsFolder = Path.Combine(_env.ContentRootPath, "Uploads");
                 if (!Directory.Exists(uploadsFolder))
                 {
@@ -67,7 +65,6 @@ namespace FreelancerApp.Server.Controllers
                     await cerere.Fisier.CopyToAsync(stream);
                 }
 
-                // Saves only the generated filename in the database, not the binary data
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
@@ -92,7 +89,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Endpoint for the Legal Expert to fetch the work queue (list of certificates awaiting validation)
         [HttpGet("nevalidate")]
         public async Task<IActionResult> GetCertificateNevalidate()
         {
@@ -143,7 +139,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Saves the Expert's Legal Decision on a certificate (approved/rejected with observations)
         [HttpPost("decizie")]
         public async Task<IActionResult> SalveazaDecizie([FromBody] DecizieRequest cerere)
         {
@@ -222,7 +217,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Endpoint that Freelancers call to check their account status 
         [HttpGet("status")]
         public async Task<IActionResult> VerificaStatusCertificat()
         {
@@ -250,7 +244,6 @@ namespace FreelancerApp.Server.Controllers
                             if (await reader.ReadAsync())
                             {
                                 string decizie = reader.IsDBNull(1) ? "" : reader.GetString(1);
-                                // Treating "aprobat" and "validat" as safe recognition keys for the decision
                                 bool esteValidat = decizie.ToLower() == "aprobat" || decizie.ToLower() == "validat";
 
                                 return Ok(new
@@ -276,7 +269,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Completely overwrites the document (e.g., A Freelancer wants to attach a new certificate instead of the rejected one)
         [HttpPut("editeaza")]
         public async Task<IActionResult> EditeazaCertificat([FromForm] AdaugaCertificatRequest cerere)
         {
@@ -369,7 +361,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Allows a user to permanently delete the document from the ecosystem
         [HttpDelete("{idCertificat}")]
         public async Task<IActionResult> StergeCertificat(int idCertificat)
         {
@@ -411,7 +402,6 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    // Again, cleans up garbage from the hard drive
                     if (!string.IsNullOrEmpty(fisier))
                     {
                         string uploadsFolder = Path.Combine(_env.ContentRootPath, "Uploads");

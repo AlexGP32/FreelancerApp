@@ -27,7 +27,6 @@ namespace FreelancerApp.Server.Controllers
             _configuration = configuration;
         }
 
-        // Extracts ID from JWT token (passed via Authorize middleware)
         private int? GetIdUtilizatorCurent()
         {
             var claim = User.FindFirst("id");
@@ -38,7 +37,6 @@ namespace FreelancerApp.Server.Controllers
             return id;
         }
 
-        // Returns ongoing jobs for a Freelancer (authorized for payment, but work not yet delivered)
         [HttpGet("freelancer/active")]
         public async Task<IActionResult> GetAngajariActive()
         {
@@ -51,12 +49,14 @@ namespace FreelancerApp.Server.Controllers
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
+
+                    // 'link' is the deliverable URL. As long as it is NULL, the project is still in progress.
                     string sql = @"SELECT a.id_angajare, a.titlu, a.descriere, a.data_angajarii
                     FROM ""ANGAJARE"" a 
                     JOIN ""FREELANCER"" f ON a.id_freelancer = f.id_freelancer
                     WHERE f.id_utilizator = @idFreelancer
                     AND a.status_plata ='Autorizat'
-                    AND a.link IS NULL"; // 'link' is the deliverable URL. As long as it is NULL, the project is still in progress.
+                    AND a.link IS NULL";
 
                     using (var cmd = new NpgsqlCommand(sql, connection))
                     {
@@ -82,7 +82,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // The status parameter dictates whether the Client wants jobs 'In Evaluare' (In Review) or completed ones.
         [HttpGet("client/lucrari")]
         public async Task<IActionResult> GetLucrari([FromQuery] string status)
         {
@@ -138,7 +137,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Similar to the client function, used by a Freelancer to display work history (Freelancer Dashboard)
         [HttpGet("freelancer/finalizate")]
         public async Task<IActionResult> GetAngajariFinalizateFreelancer()
         {
@@ -184,7 +182,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Contacts PayPal to Capture funds that were only Authorized (locked) at the beginning of the job
         [HttpPost("{idAngajare}/elibereaza-plata")]
         public async Task<IActionResult> ElibereazaPlata(int idAngajare)
         {
@@ -199,7 +196,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // 1. Retrieves the Authorization (PayPal Auth ID) based on the job ID from the local database
                     string sqlGet = @"SELECT a.id_autorizare_plata, pc.id_plata, c.id_utilizator
                     FROM ""ANGAJARE"" a
                     JOIN ""ACTIVITATE"" act ON a.id_activitate = act.id_activitate
@@ -230,7 +226,6 @@ namespace FreelancerApp.Server.Controllers
                         return Forbid();
                     }
 
-                    // 2. API Authentication with PayPal servers
                     var clientId = _configuration["PayPal:ClientId"];
                     var secret = _configuration["PayPal:Secret"];
                     var baseUrl = _configuration["PayPal:BaseUrl"];
@@ -244,7 +239,6 @@ namespace FreelancerApp.Server.Controllers
                         await tokenRes.Content.ReadAsStringAsync());
                     var accessToken = tokenJson.GetProperty("access_token").GetString();
 
-                    // 3. Sends the "Capture" command using the PayPal access token
                     httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
                     var captureRes = await httpClient.PostAsync($"{baseUrl}/v2/payments/authorizations/{idAutorizare}/capture",
                     new StringContent("{}", Encoding.UTF8, "application/json"));
@@ -255,7 +249,6 @@ namespace FreelancerApp.Server.Controllers
                         return BadRequest(new { eroare = "Eroare PayPal la capturare", detalii = err });
                     }
 
-                    // 4. Updates database status to "Finalizat" (Transaction used to maintain data consistency)
                     using var transaction = await connection.BeginTransactionAsync();
                     try
                     {
@@ -309,7 +302,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Endpoint used by a Freelancer to submit the work (Github/GDrive link) to the client for evaluation
         [HttpPost("{idAngajare}/predare")]
         public async Task<IActionResult> PredaLucrare(int idAngajare, [FromBody] PredareRequest request)
         {
@@ -326,7 +318,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // Ensure only the freelancer who won this specific contract can submit documentation
                     string sqlCheck = @"SELECT f.id_utilizator
                     FROM ""ANGAJARE"" a
                     JOIN ""FREELANCER"" f ON a.id_freelancer = f.id_freelancer
@@ -364,7 +355,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Called by the client when unsatisfied with the submitted link, refusing to release PayPal funds
         [HttpPost("{idAngajare}/disputa")]
         public async Task<IActionResult> LanseazaDisputa(int idAngajare, [FromBody] DisputaRequest request)
         {
@@ -429,7 +419,6 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    // Registers the new ticket in the system to be picked up by a "Expert_Legal"
                     string sqlInsert = @"INSERT INTO ""DISPUTA"" (id_plata, motiv, data_deschiderii, status, link_livrabil) VALUES (@idPlata, @motiv, @data, 'Deschisă' , @link)";
                     using (var cmd = new NpgsqlCommand(sqlInsert, connection))
                     {

@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom'
 import { handleAdaugaRecenzie } from '../AdaugaRecenzie'
 import { GetAuthHeaders } from '../TokenHeaders'
 
-// Helper function to standardize SweetAlert2 popups throughout the component
 const Alerta = (icon, title, text) => {
     return Swal.fire({
         icon: icon,
@@ -14,36 +13,28 @@ const Alerta = (icon, title, text) => {
     })
 }
 
-// Main Dashboard for the 'Client' role.
-// Handles project creation, offer management, PayPal payments, and job reviews.
 export default function PanouClient({ utilizator }) {
     const navigate = useNavigate()
 
-    // --- State: Dashboard Data ---
-    const [proiecte, setProiecte] = useState([]) // List of the client's projects
-    const [oferte, setOferte] = useState([]) // Offers received from freelancers
-    const [angajariEvaluare, setAngajariEvaluare] = useState([]) // Jobs waiting for client review/payment release
-    const [angajariFinalizate, setAngajariFinalizate] = useState([]) // Completed and paid jobs
+    const [proiecte, setProiecte] = useState([]) 
+    const [oferte, setOferte] = useState([]) 
+    const [angajariEvaluare, setAngajariEvaluare] = useState([]) 
+    const [angajariFinalizate, setAngajariFinalizate] = useState([]) 
 
-    // --- State: New Project Form ---
     const [titlu, setTitlu] = useState('')
     const [descriere, setDescriere] = useState('')
     const [buget, setBuget] = useState('')
     const [dataLimita, setDataLimita] = useState('')
 
-    // --- State: New Activity Form (Sub-items of a Project) ---
-    const [activitati, setActivitati] = useState([]) // Temporary array holding activities before project submission
+    const [activitati, setActivitati] = useState([]) 
     const [titluActivitate, setTitluActivitate] = useState('')
     const [descriereActivitate, setDescriereActivitate] = useState('')
     const [nrMaxFreelanceri, setNrMaxFreelanceri] = useState('')
     const [numeCategorie, setNumeCategorie] = useState('')
-    const [fisierDocumentatie, setFisierDocumentatie] = useState(null) // Optional documentation file for an activity
+    const [fisierDocumentatie, setFisierDocumentatie] = useState(null) 
 
-    // --- State: Dispute Management ---
-    // Object holding dispute reasons, keyed by job ID (idAngajare)
     const [motivDisputa, setMotivDisputa] = useState({})
 
-    // Helper: Returns today's date (YYYY-MM-DD) to prevent selecting past dates in the project deadline input
     const getDataMinima = () => {
         const azi = new Date()
         const an = azi.getFullYear()
@@ -52,7 +43,6 @@ export default function PanouClient({ utilizator }) {
         return `${an}-${luna}-${zi}`
     }
 
-    // --- API Fetch Functions ---
     const incarcaProiecte = async () => {
         try {
             const raspuns = await fetch(
@@ -113,7 +103,6 @@ export default function PanouClient({ utilizator }) {
         }
     }
 
-    // Fetch all dashboard data when the component mounts
     useEffect(() => {
         incarcaProiecte()
         incarcaOferte()
@@ -121,9 +110,6 @@ export default function PanouClient({ utilizator }) {
         incarcaAngajariFinalizate()
     }, [])
 
-    // --- Form Handlers ---
-
-    // Validates and temporarily stores an activity before the project is submitted
     const handleAdaugaActivitate = (e) => {
         e.preventDefault()
         if (!titluActivitate.trim()) {
@@ -153,11 +139,10 @@ export default function PanouClient({ utilizator }) {
             TitluActivitate: titluActivitate,
             Descriere: descriereActivitate,
             NrMaximFreelanceri: nrMaxFreelanceri ? parseInt(nrMaxFreelanceri) : null,
-            fisier: fisierDocumentatie ?? null, // Keep reference to file for later upload
+            fisier: fisierDocumentatie ?? null,
         }
         setActivitati([...activitati, activitateNoua])
         
-        // Reset activity form inputs
         setTitluActivitate('')
         setDescriereActivitate('')
         setNrMaxFreelanceri('')
@@ -165,16 +150,13 @@ export default function PanouClient({ utilizator }) {
         setFisierDocumentatie(null)
     }
 
-    // Removes an activity from the local array before project submission
     const stergeActivitate = (index) => {
         const noiActivități = activitati.filter((_, i) => i !== index)
         setActivitati(noiActivități)
     }
 
-    // Creates the project and handles sequential file uploads for activities
     const handleAdaugaProiect = async (e) => {
         e.preventDefault()
-        // Validate project before submission
         if (activitati.length === 0) {
             Alerta('warning', 'Proiect Gol', 'Trebuie să adaugi cel puțin o activitate la acest proiect!')
             return
@@ -210,7 +192,6 @@ export default function PanouClient({ utilizator }) {
         }
 
         try {
-            // 1. Create the project and its JSON activities data
             const response = await fetch('http://localhost:5129/api/Proiecte/adauga', {
                 method: 'POST',
                 headers: {
@@ -223,22 +204,19 @@ export default function PanouClient({ utilizator }) {
             if (response.ok) {
                 const data = await response.json()
                 
-                // 2. Retrieve the new project's ID to upload files correctly
                 const proiecteActualizate = await fetch(`http://localhost:5129/api/Proiecte/client`, { headers: GetAuthHeaders() })
                 const listaProiecte = await proiecteActualizate.json()
                 const idProiectNou = listaProiecte[0].idProiect
                 
-                // Retrieve the generated IDs for the newly created activities
                 const resActivitati = await fetch(`http://localhost:5129/api/Proiecte/${idProiectNou}/activitati-cu-id`, { headers: GetAuthHeaders() })
                 const listaActivitati = await resActivitati.json()
 
-                // 3. Loop through activities and upload associated files
                 for (let i = 0; i < activitati.length; i++) {
                     if (activitati[i].fisier && listaActivitati[i]) {
                         const formData = new FormData()
                         formData.append('fisier', activitati[i].fisier)
 
-                        // Important: Do NOT set Content-Type manually when using FormData
+                        // Do NOT set Content-Type manually when using FormData
                         const headersUpload = GetAuthHeaders()
                         delete headersUpload['Content-Type']
                         delete headersUpload['content-type']
@@ -263,7 +241,6 @@ export default function PanouClient({ utilizator }) {
 
                 Alerta('success', 'Proiect publicat!', data.mesaj)
                 
-                // Reset the form and fetch the updated projects
                 incarcaProiecte()
                 setTitlu('')
                 setDescriere('')
@@ -280,7 +257,6 @@ export default function PanouClient({ utilizator }) {
         }
     }
 
-    // Deletes a project completely
     const handleStergeProiect = async (idProiect) => {
         const rezultat = await Swal.fire({
             title: 'Ești sigur ?',
@@ -310,8 +286,6 @@ export default function PanouClient({ utilizator }) {
         }
     }
 
-    // Accepts an offer using a successfully authorized PayPal token (authId).
-    // This establishes the formal Job ("Angajare") in the system.
     const handleAcceptaOferta = async (idOferta, authId) => {
         try {
             const response = await fetch(`http://localhost:5129/api/Oferte/accepta/${idOferta}`, {
@@ -339,7 +313,6 @@ export default function PanouClient({ utilizator }) {
         }
     }
 
-    // Declines a received offer
     const handleRespingeOferta = async (idOferta) => {
         const rezultat = await Swal.fire({
             title: 'Ești sigur ?',
@@ -368,7 +341,6 @@ export default function PanouClient({ utilizator }) {
         }
     }
 
-    // Approves the submitted work and finalizes the payment capture process on the backend
     const handleElibereazaPlata = async (idAngajare) => {
         const result = await Swal.fire({
             title: 'Eliberare plată',
@@ -404,7 +376,6 @@ export default function PanouClient({ utilizator }) {
         }
     }
 
-    // Rejects the submitted work and sends it to a Legal Expert for resolution
     const handleLanseazaDisputa = async (idAngajare) => {
         const motiv = motivDisputa[idAngajare]
         if (!motiv || motiv.trim() === '') {
@@ -433,7 +404,7 @@ export default function PanouClient({ utilizator }) {
             const data = await res.json()
             if (res.ok) {
                 Swal.fire('Dispută trimisă.', data.mesaj, 'success')
-                setMotivDisputa({ ...motivDisputa, [idAngajare]: '' }) // Clear the text area
+                setMotivDisputa({ ...motivDisputa, [idAngajare]: '' })
                 incarcaAngajariEvaluare()
             } else {
                 Swal.fire('Eroare', data.eroare, 'error')
@@ -443,7 +414,6 @@ export default function PanouClient({ utilizator }) {
         }
     }
 
-    // Downloads the PDF invoice for a completed job
     const handleDescarcaFactura = async (idAngajare) => {
         try {
             const res = await fetch(`http://localhost:5129/api/Factura/${idAngajare}/descarca`, {
@@ -473,7 +443,7 @@ export default function PanouClient({ utilizator }) {
     const proiecteActive = proiecte.filter((p) => p.status === 'Activ')
 
     return (
-        // PayPal Initialization wrapper. We use 'authorize' intent to lock funds, not capture them immediately.
+        // PayPal intent='authorize' means we only reserve/lock funds when placing the order, capturing them later.
         <PayPalScriptProvider
             options={{
                 'client-id': 'AWgucYdPmriY2Q5Arkz3YctQjOen2aCiqTh2ovRSInyjaFwjY953PWJ27C-QoZf_KU-JLKEN2dJ6UxkC',
@@ -484,7 +454,6 @@ export default function PanouClient({ utilizator }) {
             <div className="panou-client-container">
                 <h3 className="panou-client-titlu"> Panou Client </h3>
                 
-                {/* --- SECTION 1: ADD NEW PROJECT --- */}
                 <p> Adaugă un proiect nou pentru a găsi freelancerul potrivit. </p>
                 <form
                     onSubmit={handleAdaugaProiect}
@@ -549,7 +518,6 @@ export default function PanouClient({ utilizator }) {
                         />
                     </label>
 
-                    {/* Nested form for Activities within the Project */}
                     <div className="form-activități">
                         <h4 className="form-activitati-titlu">
                             {' '}
@@ -634,7 +602,6 @@ export default function PanouClient({ utilizator }) {
                             </button>
                         </div>
 
-                        {/* Preview created activities before creating the whole project */}
                         {activitati.length > 0 && (
                             <div className="lista-activitati-adaugate">
                                 <h5 className="form-activitati-titlu">
@@ -673,7 +640,6 @@ export default function PanouClient({ utilizator }) {
                     </button>
                 </form>
 
-                {/* --- SECTION 2: JOBS IN EVALUATION (Awaiting Client Review) --- */}
                 <h4 className="panou-sectiune-titlu">
                     {' '}
                     Lucrări în evaluare ({angajariEvaluare.length})
@@ -721,7 +687,6 @@ export default function PanouClient({ utilizator }) {
                                     Eliberează Plata
                                 </button>
                                 
-                                {/* Dispute Form attached to the job */}
                                 <div className="disputa-container">
                                     <textarea
                                         className="disputa-textarea"
@@ -754,7 +719,6 @@ export default function PanouClient({ utilizator }) {
                     </ul>
                 )}
 
-                {/* --- SECTION 3: COMPLETED JOBS --- */}
                 <h4 className="panou-sectiune-titlu">
                     {' '}
                     Lucrări finalizate ({angajariFinalizate.length})
@@ -820,7 +784,6 @@ export default function PanouClient({ utilizator }) {
                     </ul>
                 )}
 
-                {/* --- SECTION 4: OFFERS RECEIVED --- */}
                 <h4 className="panou-sectiune-titlu">
                     {' '}
                     Oferte Primite ({oferte.length}){' '}
@@ -940,7 +903,6 @@ export default function PanouClient({ utilizator }) {
                     </ul>
                 )}
 
-                {/* --- SECTION 5: ACTIVE PROJECTS --- */}
                 <h4 className="panou-sectiune-titlu">
                     {' '}
                     Proiectele mele active ({proiecteActive.length}){' '}

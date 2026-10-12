@@ -4,33 +4,24 @@ import { useNavigate } from 'react-router-dom'
 import '../CSS/Inregistrare-Logare.css'
 import { GetAuthHeaders } from '../TokenHeaders'
 
-// Component for updating the user's profile settings (Account Settings).
-// Pre-fills the form with existing data and handles validation for role-specific updates.
 export default function SetariCont() {
     const navigate = useNavigate()
-    
-    // --- State Management ---
-    const [rol, setRol] = useState('') // The user's current role
-    
-    // Common profile fields
+    const [rol, setRol] = useState('') 
     const [email, setEmail] = useState('')
     const [nume, setNume] = useState('')
-    const [parola, setParola] = useState('') // Optional: Only filled if the user wants to change their password
+    const [parola, setParola] = useState('')
     const [confirmaParola, setConfirmaParola] = useState('')
     const [telefon, setTelefon] = useState('')
     const [judet, setJudet] = useState('')
     const [oras, setOras] = useState('')
     const [strada, setStrada] = useState('')
     const [numar, setNumar] = useState('')
-    
-    // Role-specific fields
-    const [cnpCui, setCnpCui] = useState('') // Client
-    const [iban, setIban] = useState('') // Freelancer
-    const [profesie, setProfesie] = useState('') // Freelancer
-    const [departament, setDepartament] = useState('') // ExpertLegal
-    const [codLegitimatie, setCodLegitimatie] = useState('') // ExpertLegal
+    const [cnpCui, setCnpCui] = useState('') 
+    const [iban, setIban] = useState('') 
+    const [profesie, setProfesie] = useState('') 
+    const [departament, setDepartament] = useState('')
+    const [codLegitimatie, setCodLegitimatie] = useState('') 
 
-    // Fetch existing profile data when the component mounts to pre-fill the form
     useEffect(() => {
         const userSalvat = localStorage.getItem('utilizatorLogat')
         if (userSalvat) {
@@ -39,13 +30,11 @@ export default function SetariCont() {
             setNume(user.nume)
             setEmail(user.email)
 
-            // Fetch full profile details from the backend
             fetch(`http://localhost:5129/api/Utilizator/profil-curent`, {
                 headers: GetAuthHeaders(),
             })
                 .then((res) => res.json())
                 .then((dateAduse) => {
-                    // Populate common fields
                     setEmail(dateAduse.email || '')
                     setTelefon(dateAduse.telefon || '')
                     setJudet(dateAduse.judet || '')
@@ -53,7 +42,6 @@ export default function SetariCont() {
                     setStrada(dateAduse.strada || '')
                     setNumar(dateAduse.numar || '')
 
-                    // Populate role-specific fields dynamically
                     if (user.rol === 'Client') {
                         setCnpCui(dateAduse.cnpCui || '')
                     }
@@ -74,14 +62,11 @@ export default function SetariCont() {
         }
     }, [navigate])
 
-    // Comprehensive form validation (similar to the Registration component)
     const valideazaFormular = () => {
-        // 1. Empty field checks for common fields
         if (!judet || !oras || !strada || !numar || !email || !telefon) {
             return 'Toate câmpurile trebuie să fie completate !'
         }
         
-        // 2. Name validation
         const numeRegex = /^[a-zA-ZăâîșțĂÂÎȘȚ\s-]+$/
         if (!numeRegex.test(nume)) {
             return 'Nume invalid! Folosește doar litere.'
@@ -90,7 +75,6 @@ export default function SetariCont() {
             return 'Numele trebuie să conțină minim 3 caractere.'
         }
         
-        // 3. Email & Phone validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(email)) {
             return "Email invalid ! Formatul adecvat este 'nume@domeniu.com'"
@@ -100,7 +84,6 @@ export default function SetariCont() {
             return "Telefon invalid ! Trebuie sa inceapă cu prefixul '07' și să aibe lungimea de 10 cifre."
         }
 
-        // 4. Password validation (Only checked if the user actually typed something in the password field)
         if (parola) {
             const parolaRegex = /^(?=.*[a-zA-Z])(?=.*\d).{6,}$/
             if (!parolaRegex.test(parola)) {
@@ -111,11 +94,10 @@ export default function SetariCont() {
             }
         }
 
-        // 5. Role-Specific Validations
         if (rol === 'Client') {
             const valoare = cnpCui.trim().toUpperCase()
             
-            // Modulo 11 validation for Romanian CNP
+            // Algoritm Validare CNP (Modulo 11)
             const validareCNP = (cnpText) => {
                 if (cnpText.length !== 13 || !/^[1-9]\d{12}$/.test(cnpText)) {
                     return false
@@ -131,7 +113,7 @@ export default function SetariCont() {
                 return cifraControlCalculata === cifraControlReala
             }
             
-            // Modulo 11 validation for Romanian CUI
+            // CUI Validation Algorithm (Modulo 11)
             const validareCUI = (cuiText) => {
                 let curatat = cuiText.replace(/^RO/i, '')
                 if (!/^\d{2,10}$/.test(curatat)) {
@@ -160,7 +142,7 @@ export default function SetariCont() {
         }
 
         if (rol === 'Freelancer') {
-            // Modulo 97 validation for IBAN
+            // IBAN Validation Algorithm (Modulo 97)
             const validareIBAN = (ibanText) => {
                 let iban = ibanText.replace(/\s+/g, '').toUpperCase()
                 if (!/^RO\d{2}[A-Z0-9]{20}$/.test(iban)) {
@@ -200,14 +182,12 @@ export default function SetariCont() {
                 return 'Codul legitimației poate conține doar litere, cifre și cratimă. '
             }
         }
-        return null // Validation passed
+        return null 
     }
 
-    // Handles the form submission to update the user's data
     const handleSubmit = async (e) => {
         e.preventDefault()
         
-        // Check for validation errors before hitting the API
         const eroare = valideazaFormular()
         if (eroare) {
             Swal.fire({
@@ -219,7 +199,6 @@ export default function SetariCont() {
             return
         }
         
-        // Build base payload
         let dateUtilizator = {
             nume,
             email,
@@ -230,12 +209,10 @@ export default function SetariCont() {
             numar,
         }
 
-        // Only include password in the update if the user actually typed a new one
         if (parola) {
             dateUtilizator.parola = parola
         }
 
-        // Add role-specific data to the payload
         if (rol === 'Client') {
             dateUtilizator = { ...dateUtilizator, cnpCui: cnpCui.toUpperCase() }
         } else if (rol === 'Freelancer') {
@@ -270,7 +247,6 @@ export default function SetariCont() {
                     text: 'Datele au fost actualizate cu succes!',
                 })
                 
-                // Update local storage with the new name and email so the UI (like headers) reflects changes immediately
                 const userLocal = JSON.parse(localStorage.getItem('utilizatorLogat'))
                 localStorage.setItem(
                     'utilizatorLogat',
@@ -303,7 +279,6 @@ export default function SetariCont() {
                     Editare profil pentru rolul de: <strong> {rol} </strong>
                 </div>
 
-                {/* --- Common Fields --- */}
                 <label>
                     <span>
                         Județ: <span className="required"> * </span>
@@ -405,7 +380,6 @@ export default function SetariCont() {
                     />
                 </label>
 
-                {/* --- Conditional Role Fields --- */}
                 {rol === 'Client' && (
                     <label>
                         <span>

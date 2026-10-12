@@ -6,36 +6,27 @@ import '../CSS/Panou.css'
 import { GetAuthHeaders } from "../TokenHeaders";
 import { handleAdaugaRecenzie } from "../AdaugaRecenzie";
 
-// Main Dashboard for the 'Freelancer' role.
-// Features include: Managing their expertise certificate (required to bid),
-// viewing matched/available jobs, submitting offers, and viewing completed jobs.
 export default function PanouFreelancer({ utilizator }) {
     const navigate = useNavigate();
     
-    // --- State: Jobs & Offers ---
-    const [activitati, setActivitati] = useState([]); // Recommended/Available jobs for the freelancer
-    const [angajariFinalizate, setAngajariFinalizate] = useState([]); // Jobs successfully completed
-    const [idActivitateSelectata, setIdActivitateSelectata] = useState(null); // The specific job the user is currently bidding on
-    const [dateOferta, setDateOferta] = useState({ descriere: "", link: "", pret: "", durata: "" }); // Form data for a new bid
+    const [activitati, setActivitati] = useState([]); 
+    const [angajariFinalizate, setAngajariFinalizate] = useState([]); 
+    const [idActivitateSelectata, setIdActivitateSelectata] = useState(null); 
+    const [dateOferta, setDateOferta] = useState({ descriere: "", link: "", pret: "", durata: "" }); 
 
-    // --- State: Certificate Management ---
     const [statusCertificat, setStatusCertificat] = useState({ stadiu: "se_incarca", esteValidat: false, idCertificat: null });
     const [afiseazaFormularCertificat, setAfiseazaFormularCertificat] = useState(false);
-    const [modEditareCertificat, setModEditareCertificat] = useState(false); // Toggle between creating a new certificate or editing an existing one
+    const [modEditareCertificat, setModEditareCertificat] = useState(false); 
     const [tipCertificat, setTipCertificat] = useState("");
     const [fisierSelectat, setFisierSelectat] = useState(null);
-    const fileInputRef = useRef(null); // Direct reference to the file input to reset it properly
+    const fileInputRef = useRef(null); 
 
-    // Load all dashboard data on mount
     useEffect(() => {
         incarcaActivitati();
         verificaStatusCertificat();
         incarcaAngajariFinalizate();
     }, []);
 
-    // --- API Data Fetching ---
-
-    // Fetches recommended activities (jobs) based on the freelancer's profile/category
     const incarcaActivitati = () => {
         fetch(`http://localhost:5129/api/Proiecte/recomandate`, {
             headers: GetAuthHeaders()
@@ -48,7 +39,6 @@ export default function PanouFreelancer({ utilizator }) {
         .catch(err => console.error("Eroare:", err));
     };
 
-    // Fetches jobs that the freelancer has completed and been paid for
     const incarcaAngajariFinalizate = async () => {
         try {
             const res = await fetch(`http://localhost:5129/api/Angajari/freelancer/finalizate`, {
@@ -63,8 +53,6 @@ export default function PanouFreelancer({ utilizator }) {
         }
     }
 
-    // Checks if the freelancer has uploaded a certificate and if a Legal Expert has approved it.
-    // Bidding is locked until a valid certificate is on file.
     const verificaStatusCertificat = async () => {
         try {
             const res = await fetch(`http://localhost:5129/api/Certificat/status`, {
@@ -75,11 +63,10 @@ export default function PanouFreelancer({ utilizator }) {
             } else if (res.ok) {
                 const data = await res.json();
                 setStatusCertificat({
-                    // Maps backend states to UI states
                     stadiu: data.esteValidat ? "validat" : (data.decizie?.toLowerCase() === "respins" ? "respins" : "in_asteptare"),
                     esteValidat: data.esteValidat,
                     idCertificat: data.idCertificat,
-                    observatii: data.observatii // Feedback from the legal expert if rejected
+                    observatii: data.observatii 
                 });
             }
         } catch (error) {
@@ -88,20 +75,16 @@ export default function PanouFreelancer({ utilizator }) {
         }
     };
     
-    // --- Certificate Handlers ---
-
-    // Prepares UI to upload a brand new certificate
     const deschideFormularCreareCertificat = () => {
         setModEditareCertificat(false);
         setTipCertificat("");
         setFisierSelectat(null);
         if (fileInputRef.current) {
-            fileInputRef.current.value = ""; // Clear file input DOM element
+            fileInputRef.current.value = ""; 
         }
         setAfiseazaFormularCertificat(true);
     };
 
-    // Prepares UI to overwrite an existing (waiting/rejected/approved) certificate
     const handlePregatesteEditareCertificat = () => {
         setModEditareCertificat(true);
         setTipCertificat("");
@@ -116,7 +99,6 @@ export default function PanouFreelancer({ utilizator }) {
         setFisierSelectat(e.target.files[0]);
     };
 
-    // Uploads the certificate file via FormData. Uses PUT if editing, POST if new.
     const handleSalveazaCertificat = async (e) => {
         e.preventDefault();
         if (!fisierSelectat) {
@@ -127,6 +109,7 @@ export default function PanouFreelancer({ utilizator }) {
         const url = modEditareCertificat ? `http://localhost:5129/api/Certificat/editeaza` : `http://localhost:5129/api/Certificat/adauga`;
         const metoda = modEditareCertificat ? "PUT" : "POST";
         
+        // Do NOT set Content-Type manually when using FormData
         const formData = new FormData();
         formData.append("Tip", tipCertificat);
         formData.append("Fisier", fisierSelectat);
@@ -135,14 +118,13 @@ export default function PanouFreelancer({ utilizator }) {
         try {
             const response = await fetch(url, {
                 method: metoda,
-                // Do NOT manually set Content-Type here, let the browser define the multipart boundary
                 headers: {"Authorization": `Bearer ${localStorage.getItem("token")}`},
                 body: formData
             });
             if (response.ok) {
                 Swal.fire("Succes.", modEditareCertificat ? "Certificatul a fost actualizat." : "Certificatul a fost trimis spre validare.", "success");
                 setAfiseazaFormularCertificat(false);
-                verificaStatusCertificat(); // Refresh status from backend
+                verificaStatusCertificat(); 
             } else {
                 const errData = await response.json();
                 Swal.fire("Eroare", errData.message || "A apărut o problemă la salvare.", "error");
@@ -152,7 +134,6 @@ export default function PanouFreelancer({ utilizator }) {
         }
     };
 
-    // Deletes the freelancer's current certificate entirely
     const handleStergeCertificat = async () => {
         const rezultat = await Swal.fire({
             title: "Ești sigur ?",
@@ -182,9 +163,6 @@ export default function PanouFreelancer({ utilizator }) {
         }
     };
 
-    // --- Offer (Bidding) Handlers ---
-
-    // Opens the bidding inline form. Validates that the freelancer has an approved certificate first.
     const handleDeschideFormularOferta = (idActivitate) => {
         if (!statusCertificat.esteValidat) {
             Swal.fire({
@@ -198,11 +176,9 @@ export default function PanouFreelancer({ utilizator }) {
         setDateOferta({descriere: "", link: "" , pret: "", durata: "" });
     };
 
-    // Submits the bid (Offer) for a specific job/activity
     const handleTrimiteOferta = async (e) => {
         e.preventDefault();
         
-        // Ensure the portfolio link is valid URL format
         if (!dateOferta.link || dateOferta.link.trim() === "") {
             Swal.fire({ icon: "warning", title: "Câmp obligatoriu", text: "Te rog introdu un link către portofoliul tău." })
             return;
@@ -232,9 +208,9 @@ export default function PanouFreelancer({ utilizator }) {
             
             if (response.ok) {
                 Swal.fire("Succes.", "Ai aplicat cu succes la aceasta activitate.", "success");
-                setIdActivitateSelectata(null); // Close the inline form
-                setDateOferta({ titlu: "", descriere: "", link: "", pret: "", durata: "" }); // Reset form
-                incarcaActivitati(); // Refresh activities to reflect changes (e.g. slots remaining)
+                setIdActivitateSelectata(null); 
+                setDateOferta({ titlu: "", descriere: "", link: "", pret: "", durata: "" }); 
+                incarcaActivitati(); 
             } else {
                 const errData = await response.json();
                 Swal.fire("Eroare", errData.message || "A apărut o problemă la trimiterea ofertei.", "error");
@@ -248,13 +224,11 @@ export default function PanouFreelancer({ utilizator }) {
         <div className="panou-client-container">
             <h3 className="panou-client-titlu"> Panou Freelancer </h3>
             
-            {/* --- SECTION 1: CERTIFICATE STATUS --- */}
             <div className="card-proiect">
                 <h4 className="panou-sectiune-titlu"> Status Verificare Profil (Certificat) </h4>
                 
                 {statusCertificat.stadiu === "se_incarca" && <p> Se verifică statusul...</p>}
                 
-                {/* Condition: No Certificate Uploaded Yet */}
                 {statusCertificat.stadiu === "lipseste" && !afiseazaFormularCertificat && (
                     <div>
                         <p> Contul tău nu este verificat. Nu poți aplica la joburi. </p>
@@ -262,7 +236,6 @@ export default function PanouFreelancer({ utilizator }) {
                     </div>
                 )}
 
-                {/* Condition: Certificate is Pending Expert Review */}
                 {statusCertificat.stadiu === "in_asteptare" && !afiseazaFormularCertificat && (
                     <div>
                         <p> certificatul tău a fost trimis și așteaptă validarea unui expert legal. </p>
@@ -273,7 +246,6 @@ export default function PanouFreelancer({ utilizator }) {
                     </div>
                 )}
 
-                {/* Condition: Certificate was Rejected */}
                 {statusCertificat.stadiu === "respins" && !afiseazaFormularCertificat &&(
                     <div>
                         <p> <strong> Certificatul tău a fost respins.</strong></p>
@@ -291,7 +263,6 @@ export default function PanouFreelancer({ utilizator }) {
                     </div>
                 )}
 
-                {/* Condition: Certificate is Approved */}
                 {statusCertificat.stadiu === "validat" && !afiseazaFormularCertificat && (
                     <div>
                         <p> Contul tău este verificat. Ai permisiunea de aplica la joburi. </p>
@@ -302,7 +273,6 @@ export default function PanouFreelancer({ utilizator }) {
                     </div>
                 )}
 
-                {/* Inline Form for Uploading/Editing Certificate */}
                 {afiseazaFormularCertificat && (
                     <form onSubmit={handleSalveazaCertificat}>
                         <h5>{modEditareCertificat ? "Editează Datele Certificatului" : "Introdu Datele Noului Certificat"}</h5>
@@ -324,13 +294,10 @@ export default function PanouFreelancer({ utilizator }) {
                 )}
             </div>
 
-            {/* --- SECTION 2: ACTIVE PROJECTS (Imported Component) --- */}
             <div className="card-proiect">
-                {/* ProiecteActive handles jobs the freelancer has successfully won and is working on */}
                 <ProiecteActive idFreelancer={utilizator.id} />
             </div>
 
-            {/* --- SECTION 3: COMPLETED JOBS --- */}
             <div className="card-proiect">
                 <h4 className="panou-sectiune-titlu"> Lucrări finalizate ({angajariFinalizate.length})</h4>
                 {angajariFinalizate.length === 0 ?(
@@ -356,7 +323,6 @@ export default function PanouFreelancer({ utilizator }) {
                 )}
             </div>
 
-            {/* --- SECTION 4: AVAILABLE JOBS / BIDDING --- */}
             <div>
                 <div className="card-proiect">
                     <h4 className="panou-sectiune-titlu"> Joburi disponibile pentru tine:</h4>
@@ -372,7 +338,6 @@ export default function PanouFreelancer({ utilizator }) {
                                 <p> <strong> Locuri rămase: </strong> {act.nrMaximFreelanceri}</p>
                                 <p> <strong> Similaritatea activității pentru tine: </strong> {(act.similaritate * 100).toFixed(1)}%</p>
                                 
-                                {/* Show link to requirements document if it exists */}
                                 {act.fisierDocumentatie && (
                                     <p>
                                         <strong> Documentație atașată: </strong>
@@ -382,13 +347,10 @@ export default function PanouFreelancer({ utilizator }) {
                                     </p>
                                 )}
 
-                                {/* Ensure job is open before showing apply button/form */}
                                 {act.nrMaximFreelanceri > 0 ?(
                                     idActivitateSelectata !== act.idActivitate ? (
-                                        // Default Apply Button
                                         <button className="btn-elibereaza" onClick={() => handleDeschideFormularOferta(act.idActivitate)}> Aplică </button>
                                     ) : (
-                                        // Inline form that appears when "Aplică" is clicked
                                         <form onSubmit={handleTrimiteOferta}>
                                             <h5> Completează oferta: </h5>
                                             <div>
@@ -418,7 +380,6 @@ export default function PanouFreelancer({ utilizator }) {
                                         </form>
                                     )
                     ) : (
-                        // Fallback if slots are full (this shouldn't render ideally if the backend filters them, but acts as a failsafe)
                         <p>Există deja un freelancer care se ocupa cu acest proiect.</p>
                     )}
                     </li>

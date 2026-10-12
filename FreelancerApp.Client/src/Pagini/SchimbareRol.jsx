@@ -4,24 +4,18 @@ import { useNavigate } from "react-router-dom";
 import "../CSS/Inregistrare-Logare.css";
 import { GetAuthHeaders } from "../TokenHeaders";
 
-// Component that allows an already registered user to add or switch to a new role.
-// E.g., A 'Client' can become a 'Freelancer' by providing the missing professional details.
 export default function SchimbareRol() {
     const navigate = useNavigate();
+    const [rolCurent, setRolCurent] = useState(""); 
+    const [rolNou, setRolNou] = useState(""); 
     
-    // --- State Management ---
-    const [rolCurent, setRolCurent] = useState(""); // The user's current role
-    const [rolNou, setRolNou] = useState(""); // The new role the user wants to adopt
-    
-    // Role-specific fields
-    const [cnpCui, setCnpCui] = useState(""); // For Client
-    const [iban, setIban] = useState(""); // For Freelancer
-    const [profesie, setProfesie] = useState(""); // For Freelancer
-    const [departament, setDepartament] = useState(""); // For ExpertLegal
-    const [codLegitimatie, setCodLegitimatie] = useState(""); // For ExpertLegal
-    const [codAdmin, setCodAdmin] = useState(""); // For Admin
+    const [cnpCui, setCnpCui] = useState(""); 
+    const [iban, setIban] = useState(""); 
+    const [profesie, setProfesie] = useState(""); 
+    const [departament, setDepartament] = useState(""); 
+    const [codLegitimatie, setCodLegitimatie] = useState(""); 
+    const [codAdmin, setCodAdmin] = useState(""); 
 
-    // Check if user is logged in and retrieve their current role from localStorage
     useEffect(() => {
         const userSalvat = localStorage.getItem("utilizatorLogat");
         if (userSalvat) {
@@ -32,20 +26,18 @@ export default function SchimbareRol() {
         }
     }, [navigate]);
 
-    // Validates the inputs based on the newly selected role
     const valideazaFormular = () => {
         if (!rolNou) {
             return "Te rog selectează un rol nou.";
         }
 
-        // --- Client Validation ---
         if (rolNou === "Client") {
             const valoare = cnpCui.trim().toUpperCase();
             if (!valoare) {
                 return "Completează CNP sau CUI.";
             }
             
-            // Modulo 11 validation for Romanian CNP
+            // Algoritm Validare CNP (Modulo 11)
             const validareCNP = (cnpText) => {
                 if (cnpText.length !== 13 || !/^[1-9]\d{12}$/.test(cnpText)) {
                     return false;
@@ -70,7 +62,7 @@ export default function SchimbareRol() {
                 }
             }
             
-            // Modulo 11 validation for Romanian CUI
+            // CUI Validation Algorithm (Modulo 11)
             const validareCUI = (cuiText) => {
                 let curatat = cuiText.replace(/^RO/i, '');
                 if (!/^\d{2,10}$/.test(curatat)) {
@@ -100,19 +92,17 @@ export default function SchimbareRol() {
                 }
             };
             
-            // Fails if neither CNP nor CUI is mathematically valid
             if (!validareCNP(valoare) && !validareCUI(valoare)) {
                 return "CUI-ul sau CNP-ul introdus este invalid (cifra de control nu corespunde).";
             }
         }
 
-        // --- Freelancer Validation ---
         if (rolNou === "Freelancer") {
             if (!profesie || !iban) {
                 return "Completează profesia și IBAN-ul.";
             }
             
-            // Modulo 97 validation for IBAN
+            // IBAN Validation Algorithm (Modulo 97)
             const validareIBAN = (ibanText) => {
                 let iban = ibanText.replace(/\s+/g, '').toUpperCase();
                 if (!/^RO\d{2}[A-Z0-9]{20}$/.test(iban)) {
@@ -144,7 +134,6 @@ export default function SchimbareRol() {
             }
         }
 
-        // --- Expert Legal Validation ---
         if (rolNou === "ExpertLegal") {
             if (!departament || !codLegitimatie) {
                 return "Completează departamentul și codul de legitimație.";
@@ -161,15 +150,13 @@ export default function SchimbareRol() {
             }
         }
 
-        // --- Admin Validation ---
         if (rolNou === "Admin" && !codAdmin) {
             return "Introdu codul administratorului.";
         }
         
-        return null; // No errors
+        return null; 
     };
 
-    // Submits the new role data to the backend
     const handleSubmit = async (e) => {
         e.preventDefault();
         const eroare = valideazaFormular();
@@ -183,7 +170,6 @@ export default function SchimbareRol() {
             return;
         }
         
-        // Build the payload depending on which new role the user selected
         let dateRol = { rolNou };
         if (rolNou === "Client") {
             dateRol = { ...dateRol, cnpCui: cnpCui.toUpperCase() };
@@ -210,7 +196,6 @@ export default function SchimbareRol() {
                     text: `Profilul tău de ${rolNou} a fost creat cu succes.`
                 });
                 
-                // Update the local storage so the dashboard immediately renders the new role
                 const userLocal = JSON.parse(localStorage.getItem("utilizatorLogat"));
                 localStorage.setItem("utilizatorLogat", JSON.stringify({ ...userLocal, rol: rolNou }));
                 navigate("/panou");
@@ -240,14 +225,12 @@ export default function SchimbareRol() {
                     Ești autentificat curent ca: <strong> {rolCurent} </strong>
                 </div>
 
-                {/* Role Selection Dropdown */}
                 <label>
                     <span>
                         Alege Noul Rol: <span className="required"> * </span>
                     </span>
                     <select value={rolNou} onChange={(e) => setRolNou(e.target.value)}>
                         <option value=""> Selectează un rol </option>
-                        {/* Hide the user's current role from the dropdown options */}
                         {rolCurent !== "Client" && <option value="Client"> Client  </option>}
                         {rolCurent !== "Freelancer" && <option value="Freelancer">Freelancer</option>}
                         {rolCurent !== "ExpertLegal" && <option value="ExpertLegal"> Expert Legal </option>}
@@ -255,7 +238,6 @@ export default function SchimbareRol() {
                     </select>
                 </label>
 
-                {/* Conditionally render fields based on the chosen new role */}
                 {rolNou === "Client" && (
                     <label>
                         <span>

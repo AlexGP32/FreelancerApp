@@ -46,7 +46,6 @@ namespace FreelancerApp.Server.Controllers
             return User.FindFirst("rol")?.Value;
         }
 
-        // Returns the list of all Dispute requests on the platform awaiting a judge's decision
         [HttpGet("deschise")]
         public async Task<IActionResult> GetDisputeDeschise()
         {
@@ -78,10 +77,10 @@ namespace FreelancerApp.Server.Controllers
                                 dispute.Add(new
                                 {
                                     id_disputa = reader.GetInt32(0),
-                                    motiv = reader.GetString(1), // The reason for the complaint filed by the client
+                                    motiv = reader.GetString(1),
                                     data_deschiderii = reader.GetDateTime(2),
-                                    linkLivrabil = reader.IsDBNull(3) ? "" : reader.GetString(3), // The product submitted by the Freelancer
-                                    sarcina = reader.IsDBNull(4) ? "" : reader.GetString(4), // The initial agreement both parties agreed upon
+                                    linkLivrabil = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                                    sarcina = reader.IsDBNull(4) ? "" : reader.GetString(4),
                                     titlu = reader.GetString(5)
                                 });
                             }
@@ -97,7 +96,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Here the Expert resolves the case by sending PayPal funds either back to the Client or forward to the Freelancer
         [HttpPost("{idDisputa}/rezolva")]
         public async Task<IActionResult> RezolvaDisputa(int idDisputa, [FromBody] RezolvareRequest request)
         {
@@ -186,7 +184,6 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    // Retrieves the long Auth ID string to communicate with PayPal servers
                     string sqlGet = @"SELECT pc.id_autorizare_plata, pc.id_plata, a.id_angajare
                     FROM ""DISPUTA"" d
                     JOIN ""PLATA_CONDITIONATA"" pc ON d.id_plata = pc.id_plata
@@ -210,7 +207,6 @@ namespace FreelancerApp.Server.Controllers
                         return BadRequest(new { eroare = "Nu s-a găsit nicio autorizare de plată pentru această dispută." });
                     }
 
-                    // Authentication to the PayPal API using secret credentials
                     var clientId = _configuration["PayPal:ClientId"];
                     var secret = _configuration["PayPal:Secret"];
                     var baseUrl = _configuration["PayPal:BaseUrl"];
@@ -255,7 +251,6 @@ namespace FreelancerApp.Server.Controllers
                         return StatusCode(502, new { eroare = "Operațiunea de plată a eșuat, disputa nu a fost soluționată." });
                     }
 
-                    // Update internal dispute status
                     string sqlUpdateDisputa = @"UPDATE ""DISPUTA"" 
                     SET status = 'Închisă', data_deciziei = @dataDeciziei, id_expert = @idExpert
                     WHERE id_disputa = @idDisputa";
@@ -267,7 +262,6 @@ namespace FreelancerApp.Server.Controllers
                         await cmd.ExecuteNonQueryAsync();
                     }
 
-                    // Different UI status depending on who won
                     string statusPlata = request.Castigator == "Client" ? "Rambursat" : "Finalizat";
 
                     string sqlUpdatePlata = @"UPDATE ""PLATA_CONDITIONATA""
@@ -288,7 +282,6 @@ namespace FreelancerApp.Server.Controllers
                         await cmd.ExecuteNonQueryAsync();
                     }
 
-                    // Closes the project automatically if it's the last contract
                     string sqlVerificaProiect = @"UPDATE ""PROIECT"" p 
                     SET status = 'Finalizat'
                     WHERE p.id_proiect = (SELECT act.id_proiect

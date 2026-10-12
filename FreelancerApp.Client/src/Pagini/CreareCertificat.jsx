@@ -2,36 +2,29 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 
-// Page where a freelancer uploads a certificate (diploma, proof of expertise)
-// so the account can be validated before applying to jobs.
 export default function CreareCertificat() {
     const navigate = useNavigate()
-    const [utilizator, setUtilizator] = useState(null) // logged-in user, loaded from localStorage
-    const [tipCertificat, setTipCertificat] = useState('') // free-text certificate type
-    const [fisier, setFisier] = useState(null) // the selected File object
+    const [utilizator, setUtilizator] = useState(null) 
+    const [tipCertificat, setTipCertificat] = useState('') 
+    const [fisier, setFisier] = useState(null) 
 
-    // Route guard: only logged-in freelancers may see this page
     useEffect(() => {
         const dateSalvate = localStorage.getItem('utilizatorLogat')
         if (!dateSalvate) {
-            // Not logged in -> go to login
             navigate('/autentificare')
         } else {
             const userParsed = JSON.parse(dateSalvate)
             if (userParsed.rol !== 'Freelancer') {
-                // Logged in but wrong role -> back to dashboard
                 navigate('/panou')
             }
             setUtilizator(userParsed)
         }
     }, [navigate])
 
-    // Keep only the first selected file (the input doesn't allow multiple)
     const handleFileChange = (e) => {
         setFisier(e.target.files[0])
     }
 
-    // Validate the inputs, then upload the certificate to the backend
     const handleSubmit = async (e) => {
         e.preventDefault()
         if (!tipCertificat.trim()) {
@@ -47,16 +40,14 @@ export default function CreareCertificat() {
             return
         }
 
-        // FormData is required to send a file (multipart/form-data).
-        // The keys ('Tip', 'Fisier') must match the property names on the backend model.
+        // It is essential to use a FormData object to send a file (multipart/form-data).
+        // The keys ('Tip', 'Fisier') must be identical to the property names expected by the .NET Controller
         const formData = new FormData()
         formData.append('Tip', tipCertificat)
         formData.append('Fisier', fisier)
 
         try {
-            // No Content-Type header on purpose: the browser sets it automatically
-            // (with the multipart boundary) when the body is FormData.
-            // The JWT token proves who is uploading.
+            // The Content-Type header was intentionally omitted. The browser will automatically generate it, including the Boundary parameter required for files.
             const response = await fetch(
                 'http://localhost:5129/api/Certificat/adauga',
                 {
@@ -68,7 +59,6 @@ export default function CreareCertificat() {
                 }
             )
             if (response.ok) {
-                // Wait for the user to close the popup before redirecting
                 await Swal.fire({
                     icon: 'success',
                     title: 'Succes',
@@ -76,7 +66,6 @@ export default function CreareCertificat() {
                 })
                 navigate('/panou')
             } else {
-                // The backend returns errors as JSON in the form { eroare: "..." }
                 const errorData = await response.json()
                 Swal.fire(
                     'Eroare',
@@ -85,7 +74,6 @@ export default function CreareCertificat() {
                 )
             }
         } catch (error) {
-            // Network failure: server down or unreachable
             console.error('Eroare de conexiune:', error)
             Swal.fire(
                 'Eroare',
@@ -95,7 +83,6 @@ export default function CreareCertificat() {
         }
     }
 
-    // Render nothing useful until the guard above has loaded the user
     if (!utilizator) {
         return <h2> Se încarcă...</h2>
     }
@@ -120,7 +107,6 @@ export default function CreareCertificat() {
                 </label>
                 <label>
                     <strong> Încarcă Fișier (PDF, JPG, PNG):</strong>
-                    {/* accept only filters the file picker; the backend must still validate the file type */}
                     <input
                         type="file"
                         accept=".pdf, image/*"
@@ -129,7 +115,6 @@ export default function CreareCertificat() {
                 </label>
                 <div>
                     <button type="submit">Trimite spre validare</button>
-                    {/* type="button" so it doesn't submit the form */}
                     <button type="button" onClick={() => navigate('/panou')}>
                         Înapoi
                     </button>

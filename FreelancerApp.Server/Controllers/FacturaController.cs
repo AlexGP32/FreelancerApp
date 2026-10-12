@@ -37,7 +37,6 @@ namespace FreelancerApp.Server.Controllers
             return User.FindFirst("rol")?.Value;
         }
 
-        // Dynamically generates a PDF file containing PayPal transaction data and contract information
         [HttpGet("{idAngajare}/descarca")]
         public async Task<IActionResult> DescarcaFactura(int idAngajare)
         {
@@ -63,7 +62,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // Complex query to gather all textual details needed for invoice generation
                     string sql = @"SELECT uc.nume AS numeClient, 
                     uf.nume AS numeFreelancer,
                     p.titlu AS titluProiect,
@@ -146,7 +144,6 @@ namespace FreelancerApp.Server.Controllers
 
                 var pdfBytes = pdf.GeneratePdf();
 
-                // Returns the byte array transformed into a physical PDF file
                 return File(pdfBytes, "application/pdf", $"Factura_{idAngajare}.pdf");
             }
             catch (Exception ex)

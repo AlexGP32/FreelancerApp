@@ -22,7 +22,7 @@ namespace FreelancerApp.Server.Controllers
     {
         private readonly string _connectionString = string.Empty;
         private readonly IConfiguration _configuration;
-        private readonly EmbeddingService _embeddingService; // Used for AI recommendations based on text vectors
+        private readonly EmbeddingService _embeddingService;
 
         public UtilizatorController(IConfiguration configuration, EmbeddingService embeddingService)
         {
@@ -31,7 +31,6 @@ namespace FreelancerApp.Server.Controllers
             _embeddingService = embeddingService;
         }
 
-        // Extracts the ID from the JWT token
         private int? GetIdUtilizatorCurent()
         {
             var claim = User.FindFirst("id");
@@ -42,23 +41,19 @@ namespace FreelancerApp.Server.Controllers
             return id;
         }
 
-        // Extracts the role from the JWT token
         private string? GetRolCurent()
         {
             return User.FindFirst("rol")?.Value;
         }
 
         // Transforms a freelancer's profession and name into a mathematical vector (embedding) 
-        // for semantic search (similar job recommendations) later
+        // for semantic search (similar job recommendations)
         private async Task<string> GenereazaVectorEmbedding(string profesie, string nume)
         {
             string textEmbedding = $"{profesie} {nume}";
             float[] embedding = await _embeddingService.GetEmbeddingAsync(textEmbedding);
-            // Formats the float array as a typical PostgreSQL vector string: [val1, val2, ...]
             return "[" + string.Join(",", embedding.Select(f => f.ToString(System.Globalization.CultureInfo.InvariantCulture))) + "]";
         }
-
-        // --- Registration Endpoints ---
 
         [HttpPost("inregistrare-client")]
         public async Task<IActionResult> InregistrareClient([FromBody] InregistrareClientRequest cerere)
@@ -69,10 +64,8 @@ namespace FreelancerApp.Server.Controllers
         [HttpPost("inregistrare-freelancer")]
         public async Task<IActionResult> InregistrareFreelancer([FromBody] InregistrareFreelancerRequest cerere)
         {
-            // Executes the main user insertion
             var result = await ExecutaInregistrare(cerere, "FREELANCER", "iban", cerere.Iban, "profesie", cerere.Profesie);
 
-            // If added successfully, generates and asynchronously stores the vector embedding
             if (result is OkObjectResult)
             {
                 try
@@ -104,7 +97,6 @@ namespace FreelancerApp.Server.Controllers
         [HttpPost("Inregistrare-admin")]
         public async Task<IActionResult> InregistrareAdmin([FromBody] InregistrareAdminRequest cerere)
         {
-            // Additional validation specific to Admin: must provide a valid secret code from the database
             string checkSqlAdmin = "SELECT COUNT(*) FROM \"ADMIN\" WHERE \"cod_admin\" = @cod";
             using (var connection = new NpgsqlConnection(_connectionString))
             {
@@ -122,7 +114,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Generic helper function that handles the transactional logic of creating an account
         private async Task<IActionResult> ExecutaInregistrare(
             DateInregistrare user,
             string tabel,
@@ -137,7 +128,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // 1. Checks if the email address exists
                     string checkSql = "SELECT COUNT(*) FROM \"UTILIZATOR\" WHERE \"email\" = @email";
                     using (var checkCmd = new NpgsqlCommand(checkSql, connection))
                     {
@@ -150,24 +140,22 @@ namespace FreelancerApp.Server.Controllers
                     }
 
                     // A transaction is used so that if role insertion fails (e.g., duplicate IBAN),
-                    // the base USER row doesn't remain "orphaned".
+                    // the base USER row doesn't remain "orphaned" in the DB.
                     using (var trans = await connection.BeginTransactionAsync())
                     {
                         int noulId = 0;
 
-                        // Insert base data + Password hashing
                         string insertSql = "INSERT INTO \"UTILIZATOR\" (\"nume\", \"email\", \"parola\", \"telefon\")  VALUES (@nume, @email, @parola, @telefon) RETURNING id_utilizator";
                         using (var insertCmd = new NpgsqlCommand(insertSql, connection, trans))
                         {
                             insertCmd.Parameters.AddWithValue("@nume", user.Nume);
                             insertCmd.Parameters.AddWithValue("@email", user.Email);
-                            insertCmd.Parameters.AddWithValue("@parola", BC.HashPassword(user.Parola)); // Password encryption
+                            insertCmd.Parameters.AddWithValue("@parola", BC.HashPassword(user.Parola));
                             insertCmd.Parameters.AddWithValue("@telefon", (object?)user.Telefon ?? DBNull.Value);
                             var idResult = await insertCmd.ExecuteScalarAsync();
                             noulId = Convert.ToInt32(idResult);
                         }
 
-                        // Insert common address
                         string adresaSql = "INSERT INTO \"ADRESA\"(id_utilizator, judet, oras, strada, numar) VALUES (@id_utilizator, @judet, @oras, @strada, @numar)";
                         using (var adresaCmd = new NpgsqlCommand(adresaSql, connection, trans))
                         {
@@ -179,7 +167,6 @@ namespace FreelancerApp.Server.Controllers
                             await adresaCmd.ExecuteNonQueryAsync();
                         }
 
-                        // Insert into the role-specific table (e.g., CLIENT, FREELANCER, etc.)
                         string sqlTabel = col2 == null
                         ? $"INSERT INTO \"{tabel}\" (\"id_utilizator\", \"{col1}\") VALUES (@id, @v1)"
                         : $"INSERT INTO \"{tabel}\" (\"id_utilizator\", \"{col1}\", \"{col2}\") VALUES (@id, @v1, @v2)";
@@ -201,7 +188,6 @@ namespace FreelancerApp.Server.Controllers
             }
             catch (PostgresException ex) when (ex.SqlState == "23505")
             {
-                // Catches database errors related to duplicate unique keys
                 string mesaj = "Aceste date există deja în sistem.";
                 if (ex.ConstraintName != null)
                 {
@@ -218,8 +204,6 @@ namespace FreelancerApp.Server.Controllers
                 return StatusCode(500, "Eroare internă la baza de date: " + ex.Message);
             }
         }
-
-        // --- Login ---
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest cerere)
@@ -264,19 +248,16 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    // Encrypted password verification
                     if (!BC.Verify(cerere.Parola, parolaDb))
                     {
                         return Unauthorized("Email sau parolă incorectă.");
                     }
 
-                    // Checks if the user selected the role they want to log into
                     if (string.IsNullOrEmpty(cerere.Rol))
                     {
                         return BadRequest("Te rog selectează un tip de cont pentru a te autentifica.");
                     }
 
-                    // Checks if the person actually holds that role
                     string tabelCautat = "";
                     if (cerere.Rol == "Client") tabelCautat = "\"CLIENT\"";
                     else if (cerere.Rol == "Freelancer") tabelCautat = "\"FREELANCER\"";
@@ -297,7 +278,6 @@ namespace FreelancerApp.Server.Controllers
 
                     string rolActiv = cerere.Rol;
                     int? idSpecificClient = null;
-                    // If client, also retrieve the specific client ID
                     if (rolActiv == "Client")
                     {
                         string sqlClient = "SELECT id_client FROM \"CLIENT\" WHERE id_utilizator = @id";
@@ -312,7 +292,6 @@ namespace FreelancerApp.Server.Controllers
                         }
                     }
 
-                    // Generate JWT Token
                     var cheie = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Cheie"]!));
                     var credentiale = new SigningCredentials(cheie, SecurityAlgorithms.HmacSha256);
                     var claims = new[]
@@ -345,8 +324,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // --- Profile Data ---
-
         [HttpGet("profil/{id}")]
         [Authorize]
         public async Task<IActionResult> PreluareProfil(int id)
@@ -356,7 +333,6 @@ namespace FreelancerApp.Server.Controllers
             {
                 return Unauthorized(new { eroare = "Token invalid." });
             }
-            // Only an Admin or the account owner can retrieve profile data
             if (idUserCurent.Value != id && GetRolCurent() != "Admin")
             {
                 return Forbid();
@@ -367,7 +343,6 @@ namespace FreelancerApp.Server.Controllers
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
-                    // Fetches data from multiple tables. The user can have any number of roles attached to the account.
                     string sql = @"SELECT u.nume, u.email , u.telefon, ad.judet, ad.oras, ad.strada, ad.numar, c.cnp_cui, f.iban, f.profesie, e.departament, e.cod_legitimatie
                                 FROM ""UTILIZATOR"" u  LEFT JOIN ""ADRESA"" ad ON u.id_utilizator = ad.id_utilizator
                                 LEFT JOIN ""CLIENT"" c ON u.id_utilizator = c.id_utilizator
@@ -426,7 +401,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // Ensure the newly desired email is not already taken
                     string checkEmailSql = "SELECT COUNT(*) FROM \"UTILIZATOR\" WHERE email = @email AND id_utilizator != @id";
                     using (var checkCmd = new NpgsqlCommand(checkEmailSql, connection))
                     {
@@ -441,7 +415,6 @@ namespace FreelancerApp.Server.Controllers
 
                     using (var trans = await connection.BeginTransactionAsync())
                     {
-                        // Update base USER table (password is only modified if the client typed a new one)
                         string updateUtilizator = "UPDATE \"UTILIZATOR\" SET nume = @nume, email = @email, telefon = @telefon";
                         if (!string.IsNullOrEmpty(cerere.Parola))
                         {
@@ -461,7 +434,6 @@ namespace FreelancerApp.Server.Controllers
                             await cmdU.ExecuteNonQueryAsync();
                         }
 
-                        // Update address
                         string updateAdresa = "UPDATE \"ADRESA\" SET judet = @judet, oras = @oras, strada = @strada , numar = @numar WHERE id_utilizator = @id";
                         using (var cmdA = new NpgsqlCommand(updateAdresa, connection, trans))
                         {
@@ -473,7 +445,6 @@ namespace FreelancerApp.Server.Controllers
                             await cmdA.ExecuteNonQueryAsync();
                         }
 
-                        // Update based on the active roles the user has (cerere.CnpCui is non-empty only if the request comes from a Client form, etc.)
                         if (!string.IsNullOrEmpty(cerere.CnpCui))
                         {
                             string updateC = "UPDATE \"CLIENT\" SET cnp_cui = @cnp WHERE id_utilizator = @id";
@@ -486,7 +457,7 @@ namespace FreelancerApp.Server.Controllers
                         }
                         if (!string.IsNullOrEmpty(cerere.Iban))
                         {
-                            // If a freelancer updates their data, the embedding must be regenerated for semantic search
+                            // Regenerates the embedding to keep semantic search accurate with the new data
                             string vectorString = await GenereazaVectorEmbedding(cerere.Profesie, cerere.Nume);
                             string updateF = "UPDATE \"FREELANCER\" SET iban = @iban, profesie = @profesie, embedding = @embedding::vector WHERE id_utilizator = @id";
                             using (var cmdF = new NpgsqlCommand(updateF, connection, trans))
@@ -524,7 +495,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Allows adding a new profile (role) to an already existing account
         [HttpPost("schimbare-rol")]
         [Authorize]
         public async Task<IActionResult> SchimbareRol([FromBody] SchimbareRolRequest cerere)
@@ -541,7 +511,6 @@ namespace FreelancerApp.Server.Controllers
                     string sqlCheck = "";
                     string sqlInsert = "";
 
-                    // Sets verification and insertion queries based on the desired role
                     if (cerere.RolNou == "Client")
                     {
                         sqlCheck = "SELECT COUNT(*) FROM \"CLIENT\" WHERE id_utilizator = @id";
@@ -577,7 +546,6 @@ namespace FreelancerApp.Server.Controllers
                         return BadRequest("Rol necunoscut.");
                     }
 
-                    // Checks if the user already has this role attached to the account
                     using (var cmdCheck = new NpgsqlCommand(sqlCheck, connection))
                     {
                         cmdCheck.Parameters.AddWithValue("@id", idUser);
@@ -587,7 +555,6 @@ namespace FreelancerApp.Server.Controllers
                             return BadRequest($"Ai deja profil creat pentru rolul de {cerere.RolNou}!");
                         }
 
-                        // Generates the embedding if the new role is Freelancer
                         string? vectorString = null;
                         if (cerere.RolNou == "Freelancer")
                         {
@@ -602,7 +569,6 @@ namespace FreelancerApp.Server.Controllers
                             vectorString = await GenereazaVectorEmbedding(cerere.Profesie ?? "", numeUtilizator);
                         }
 
-                        // Adds the new profile to the database
                         using (var cmdIn = new NpgsqlCommand(sqlInsert, connection))
                         {
                             cmdIn.Parameters.AddWithValue("@id", idUser);
@@ -641,9 +607,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // --- Admin Options ---
-
-        // Exclusive method for Administrators to see all platform users
         [HttpGet("Toti")]
         [Authorize]
         public async Task<IActionResult> GetTotiUtilizatorii()
@@ -660,7 +623,6 @@ namespace FreelancerApp.Server.Controllers
                 {
                     await connection.OpenAsync();
 
-                    // Creates a concatenated string with all roles (since a user can be both Client and Freelancer, for example)
                     string sql = @"SELECT u.id_utilizator, u.nume, u.email, u.telefon, CONCAT_WS(', ', CASE WHEN c.id_utilizator IS NOT NULL THEN 'Client' ELSE NULL END,
                     CASE WHEN f.id_utilizator IS NOT NULL THEN 'Freelancer' ELSE NULL END,
                     CASE WHEN e.id_utilizator IS NOT NULL THEN 'Expert Legal' ELSE NULL END,
@@ -695,7 +657,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Exclusive method for Administrators to completely delete a user's account
         [HttpDelete("sterge/{id}")]
         [Authorize]
         public async Task<IActionResult> StergeUtilizator(int id)
@@ -740,6 +701,8 @@ namespace FreelancerApp.Server.Controllers
             }
             catch (PostgresException ex) when (ex.SqlState == "23503")
             {
+                // Constrains failed (ex: User still has active projects or invoices).
+                // PostgreSQL won't allow cascading delete on critical financial data automatically.
                 return BadRequest("Utilizatorul nu poate fi șters deoarece are date active în sistem (proiecte, angajări, dispute). Ștergeți mai întâi rolurile asociate.");
             }
             catch (Exception ex)
@@ -748,7 +711,6 @@ namespace FreelancerApp.Server.Controllers
             }
         }
 
-        // Exclusive method for Administrators to delete a single profile (e.g., revokes someone's right to be a Freelancer)
         [HttpDelete("sterge-rol/{idUtilizator}/{rol}")]
         [Authorize]
         public async Task<IActionResult> StergeRol(int idUtilizator, string rol)

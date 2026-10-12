@@ -2,19 +2,15 @@ import React, { useState, useEffect } from 'react'
 import Swal from 'sweetalert2'
 import { GetAuthHeaders } from '../TokenHeaders'
 
-// Component used by Freelancers to manage and submit deliverables for their active jobs.
 export default function ProiecteActive() {
-    // --- State Management ---
-    const [proiecte, setProiecte] = useState([]) // List of active jobs assigned to the freelancer
-    const [linkPredare, setLinkPredare] = useState({}) // Stores the input links for each job, keyed by idAngajare
+    const [proiecte, setProiecte] = useState([])
+    const [linkPredare, setLinkPredare] = useState({})
     const [isLoading, setIsLoading] = useState(true)
 
-    // Fetch active jobs on mount
     useEffect(() => {
         fetchProiecteActive()
     }, [])
 
-    // Retrieves the freelancer's active jobs from the backend
     const fetchProiecteActive = async () => {
         setIsLoading(true)
         try {
@@ -26,7 +22,6 @@ export default function ProiecteActive() {
             )
             if (res.ok) {
                 const data = await res.json()
-                // Filter out jobs that are already finished or pending client review
                 const proiecteInDesfasurare = data.filter(
                     (p) =>
                         p.status !== 'Finalizat' && p.status !== 'In Evaluare'
@@ -42,16 +37,13 @@ export default function ProiecteActive() {
         }
     }
 
-    // Updates the specific input field for a given job
     const handleLinkChange = (idAngajare, valoare) => {
         setLinkPredare({ ...linkPredare, [idAngajare]: valoare })
     }
 
-    // Submits the deliverable link to the client for review
     const handlePredareMunca = async (idAngajare) => {
         const linkTrimis = linkPredare[idAngajare]
         
-        // Basic validation to ensure a link is provided
         if (!linkTrimis || linkTrimis.trim() === '') {
             Swal.fire({
                 icon: 'warning',
@@ -61,7 +53,6 @@ export default function ProiecteActive() {
             return
         }
         
-        // Regex validation to ensure the input is actually a URL
         const regexLink = /^(https?:\/\/)?([\w\-]+\.)+[a-z]{2,}(\/.*)?$/i
         if (!regexLink.test(linkTrimis.trim())) {
             Swal.fire({
@@ -96,9 +87,7 @@ export default function ProiecteActive() {
                     'Lucrarea a fost predată. Așteptăm răspunsul clientului.',
                     'success'
                 )
-                // Clear the input field for this specific job
                 setLinkPredare({ ...linkPredare, [idAngajare]: '' })
-                // Refresh the list (the submitted job will disappear because its status changes to 'In Evaluare')
                 fetchProiecteActive()
             } else {
                 const data = await res.json()

@@ -6,7 +6,6 @@ import { GetAuthHeaders } from './TokenHeaders'
 // and then submits the data to the backend.
 // This function can be reused by both Clients and Freelancers.
 export const handleAdaugaRecenzie = async (idAngajare, tipAutor) => {
-    // Open a SweetAlert2 modal with custom HTML inputs
     const { value: formValues } = await Swal.fire({
         title: 'Scrie o recenzie',
         html:
@@ -21,22 +20,18 @@ export const handleAdaugaRecenzie = async (idAngajare, tipAutor) => {
             const nota = document.getElementById('swal-nota').value
             const comentariu = document.getElementById('swal-comentariu').value
             
-            // Validate the rating is between 1 and 5
             if (!nota || nota < 1 || nota > 5) {
                 Swal.showValidationMessage(
                     'te rog introdu o notă între 1 și 5.'
                 )
-                return false // Prevents modal from closing
+                return false // Prevents the modal from closing if validation fails
             }
-            // Return the validated values
             return { nota: parseInt(nota), comentariu: comentariu }
         },
     })
 
-    // If the user confirmed the modal and validation passed
     if (formValues) {
         try {
-            // Submit the review to the backend
             const res = await fetch('http://localhost:5129/api/Recenzie', {
                 method: 'POST',
                 headers: {
@@ -44,8 +39,8 @@ export const handleAdaugaRecenzie = async (idAngajare, tipAutor) => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    idAngajare: idAngajare, // The job this review is associated with
-                    tipAutor: tipAutor, // "Client" or "Freelancer"
+                    idAngajare: idAngajare, 
+                    tipAutor: tipAutor, 
                     nota: formValues.nota,
                     comentariu: formValues.comentariu,
                 }),
@@ -55,7 +50,7 @@ export const handleAdaugaRecenzie = async (idAngajare, tipAutor) => {
             if (res.ok) {
                 Swal.fire('Succes', data.mesaj, 'success')
             } else {
-                // e.g., Backend logic preventing duplicate reviews for the same job
+                // Catches backend errors, e.g., preventing duplicate reviews for the same job
                 Swal.fire(
                     'Eroare',
                     data.eroare || 'A apărut o problemă.',
