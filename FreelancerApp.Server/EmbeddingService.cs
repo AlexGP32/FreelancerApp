@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -7,63 +6,54 @@ namespace FreelancerApp.Server.Services
 {
     public class EmbeddingService
     {
-        private readonly string _apiKey;
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(120)
+        };
+
+        private readonly string _baseUrl;
+        private readonly string _model;
 
         public EmbeddingService(IConfiguration configuration)
         {
-            _apiKey = configuration["HuggingFace:ApiKey"];
+            _baseUrl = configuration["Ollama:BaseUrl"] ?? "http://localhost:11434";
+            _model = configuration["Ollama:Model"] ?? "bge-m3";
         }
 
         public async Task<float[]> GetEmbeddingAsync(string text)
         {
-            var requestBody = new { inputs = text };
-            var json = JsonSerializer.Serialize(requestBody);
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                "https://router.huggingface.co/hf-inference/models/ibm-granite/granite-embedding-97m-multilingual-r2/pipeline/feature-extraction")
+            var json = JsonSerializer.Serialize(new { model = _model, input = text });
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/api/embed")
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
             };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
 
-            var response = await _httpClient.SendAsync(request);
+            HttpResponseMessage response;
+            try
+            {
+                response = await _httpClient.SendAsync(request);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new Exception(
+                    "Nu mă pot conecta la Ollama. Verifică dacă rulează (iconița din system tray sau 'ollama serve').", ex);
+            }
+
             var responseString = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
             {
-                throw new Exception($"Eroare API HuggingFace ({(int)response.StatusCode}): {responseString}");
+                throw new Exception($"Eroare Ollama ({(int)response.StatusCode}): {responseString}");
             }
 
-            var doc = JsonDocument.Parse(responseString);
-            var root = doc.RootElement;
+            using var doc = JsonDocument.Parse(responseString);
 
-            float[] embeddingArray;
-
-            if (root.ValueKind == JsonValueKind.Array &&
-                root.EnumerateArray().First().ValueKind == JsonValueKind.Number)
-            {
-                embeddingArray = root
-                    .EnumerateArray()
-                    .Select(e => e.GetSingle())
-                    .ToArray();
-            }
-            else if (root.ValueKind == JsonValueKind.Array &&
-                     root.EnumerateArray().First().ValueKind == JsonValueKind.Array)
-            {
-                embeddingArray = root
-                    .EnumerateArray()
-                    .First()
-                    .EnumerateArray()
-                    .Select(e => e.GetSingle())
-                    .ToArray();
-            }
-            else
-            {
-                throw new Exception($"Format necunoscut de embedding: {root.ValueKind}");
-            }
-
-            return embeddingArray;
+            return doc.RootElement
+                .GetProperty("embeddings")[0]
+                .EnumerateArray()
+                .Select(e => e.GetSingle())
+                .ToArray();
         }
     }
 }

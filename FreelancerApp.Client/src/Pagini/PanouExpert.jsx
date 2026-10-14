@@ -103,20 +103,21 @@ export default function PanouExpert({ utilizator }) {
     }
 
     const handleRezolvaDisputa = async (idDisputa, castigator) => {
-        const textConfirmare =
-            castigator === 'Client'
-                ? 'Banii vor fi rambursați clientului.'
-                : 'Banii vor fi eliberați către freelancer.'
-        
-        Swal.fire({
-            title: `Aprobă ideea ${castigator === 'Client' ? 'Clientului' : 'Freelancerului'}?`,
-            text: textConfirmare,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Confirmă Decizia',
-            cancelButtonText: 'Anulează',
-        })
-        if (result.isConfirmed) {
+    const textConfirmare =
+        castigator === 'Client'
+            ? 'Banii vor fi rambursați clientului.'
+            : 'Banii vor fi eliberați către freelancer.'
+
+    const result = await Swal.fire({   
+        title: `Aprobă ideea ${castigator === 'Client' ? 'Clientului' : 'Freelancerului'}?`,
+        text: textConfirmare,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Confirmă Decizia',
+        cancelButtonText: 'Anulează',
+    })
+
+    if (result.isConfirmed) {
             Swal.fire({
                 title: 'Se procesează decizia...',
                 allowOutsideClick: false,

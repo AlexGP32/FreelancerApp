@@ -1,59 +1,66 @@
 # FreelancerApp
 
-Aplicatie web de tip freelancing marketplace, unde clientii pot posta proiecte si angaja freelanceri, iar freelancerii pot aplica, lucra la proiecte si primi plata prin PayPal. Proiectul are frontend separat de backend: React pe partea de client si ASP.NET Core pe server, cu baza de date PostgreSQL.
+![FreelancerApp demo](demo.gif)
 
-## Despre proiect
+A freelancing marketplace web app where clients can post projects and hire freelancers, and freelancers can apply, work on projects and get paid through PayPal. The frontend and backend are separate: React on the client side, ASP.NET Core on the server, with a PostgreSQL database.
 
-Aplicatia are mai multe roluri de utilizator - client, freelancer, expert si admin - fiecare cu propriul panou. Un client poate posta un proiect, primi oferte de la freelanceri, angaja pe cineva si elibera plata dupa ce lucrarea e predata. Freelancerii pot aplica la proiecte, incarca documente/certificate pentru validare, si primesc recenzii dupa finalizarea lucrarilor. Exista si un sistem de dispute pentru cazurile in care client si freelancer nu cad de acord, plus generare de facturi in PDF pentru platile facute.
+## About
 
-## Functionalitati principale
+The app supports several user roles (client, freelancer, expert and admin), each with its own dashboard. A client can post a project, receive offers from freelancers, hire someone and release the payment once the work is delivered. Freelancers can apply to projects, upload documents/certificates for validation, and receive reviews after finishing a job. There is also a dispute system for cases where the client and the freelancer disagree, plus PDF invoice generation for completed payments.
 
-- Inregistrare si autentificare cu roluri multiple (client, freelancer, expert, admin), autentificare prin JWT
-- Postare proiecte si activitati de catre clienti
-- Oferte de la freelanceri, acceptate sau respinse de client
-- Angajari, predare lucrare, eliberare plata, dispute
-- Plati integrate cu PayPal
-- Generare facturi PDF (QuestPDF)
-- Certificate incarcate de freelanceri, validate de admin/expert
-- Recenzii intre client si freelancer
-- Recomandari de proiecte pe baza de embeddings (EmbeddingService)
+## Key Features
 
-## Tehnologii folosite
+- Registration and login with multiple roles (client, freelancer, expert, admin), using JWT authentication
+- Clients can post projects and tasks
+- Freelancers send offers, which the client can accept or reject
+- Hiring, work delivery, payment release and disputes
+- Integrated PayPal payments
+- PDF invoice generation (QuestPDF)
+- Certificates uploaded by freelancers and validated by an admin/expert
+- Reviews between client and freelancer
+- Embedding-based project recommendations (EmbeddingService)
 
-Backend:
+## Tech Stack
+
+**Backend**
+
 - ASP.NET Core (.NET)
 - Entity Framework Core
 - PostgreSQL
-- JWT pentru autentificare
-- QuestPDF pentru generare facturi
+- JWT authentication
+- QuestPDF for invoice generation
 
-Frontend:
+**Frontend**
+
 - React 19
 - Vite
 - React Router
 - SweetAlert2
 - PayPal React SDK
 
-## Structura proiectului
+## Project Structure
 
-- `FreelancerApp.Client/` - aplicatia React (pagini in `src/Pagini`, stiluri in `src/CSS`)
-- `FreelancerApp.Server/` - API-ul ASP.NET Core (`Controllers/`, `Models/`, `Uploads/` pentru fisiere incarcate)
-- `Licenta.sql` - script SQL pentru popularea bazei de date
-- `FreelancerApp.sln` - solutia Visual Studio care leaga client si server
+- `FreelancerApp.Client/` - React app (pages in `src/Pagini`, styles in `src/CSS`)
+- `FreelancerApp.Server/` - ASP.NET Core API (`Controllers/`, `Models/`, `Uploads/` for uploaded files)
+- `Licenta.sql` - SQL script that populates the database
+- `FreelancerApp.sln` - Visual Studio solution linking the client and the server
 
-## Cum rulezi proiectul
+## Getting Started
 
-1. Creeaza o baza de date goala in PostgreSQL numita `Licenta`.
-2. Ruleaza scriptul `Licenta.sql` pentru a popula baza cu datele necesare.
-3. In `FreelancerApp.Server/appsettings.json` actualizeaza datele de conectare la baza, conturile paypal dar si cheia modelului API.
-4. Porneste backend-ul:
-   ```
+1. Create an empty PostgreSQL database named `Licenta`.
+2. Run the `Licenta.sql` script to populate it with the required data.
+3. In `FreelancerApp.Server/appsettings.json`, update the database connection string, the PayPal credentials and the API key for the embedding model.
+4. Start the backend:
+
+```
    cd FreelancerApp.Server
    dotnet run
-   ```
-5. Porneste frontend-ul:
-   ```
+```
+
+5. Start the frontend:
+
+```
    cd FreelancerApp.Client
    npm install
    npm run dev
-   ```
+```

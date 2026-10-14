@@ -6,9 +6,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using FreelancerApp.Server.Services;
+using DotNetEnv;
 
 QuestPDF.Settings.License = LicenseType.Community;
-DotNetEnv.Load();
+DotNetEnv.Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 

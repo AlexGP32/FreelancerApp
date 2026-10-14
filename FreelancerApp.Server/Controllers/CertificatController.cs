@@ -12,7 +12,7 @@ namespace FreelancerApp.Server.Controllers
     [ApiController]
     public class CertificatController : ControllerBase
     {
-        private readonly string _connectionString = string.empty;
+        private readonly string _connectionString = string.Empty;
         private readonly IWebHostEnvironment _env;
 
         public CertificatController(IConfiguration configuration, IWebHostEnvironment env)

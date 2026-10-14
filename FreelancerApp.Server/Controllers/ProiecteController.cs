@@ -19,7 +19,7 @@ namespace FreelancerApp.Server.Controllers
     [ApiController]
     public class ProiecteController : ControllerBase
     {
-        private readonly string _connectionString = string.empty;
+        private readonly string _connectionString = string.Empty;
         private readonly EmbeddingService _embeddingService;
         private readonly IWebHostEnvironment _env;
 
