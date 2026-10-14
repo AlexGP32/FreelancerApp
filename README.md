@@ -14,21 +14,23 @@ The app supports several user roles (client, freelancer, expert and admin), each
 - Clients can post projects and tasks
 - Freelancers send offers, which the client can accept or reject
 - Hiring, work delivery, payment release and disputes
+- Dispute resolution panel where an expert decides whether the client is refunded or the freelancer is paid
 - Integrated PayPal payments
 - PDF invoice generation (QuestPDF)
-- Certificates uploaded by freelancers and validated by an admin/expert
+- Certificates uploaded by freelancers and validated by an expert/admin
 - Reviews between client and freelancer
-- Embedding-based project recommendations (EmbeddingService)
+- Embedding-based project recommendations (EmbeddingService), powered by a local model served through Ollama
 
 ## Tech Stack
 
 **Backend**
 
-- ASP.NET Core (.NET)
+- ASP.NET Core (.NET 9)
 - Entity Framework Core
 - PostgreSQL
 - JWT authentication
 - QuestPDF for invoice generation
+- Ollama (local embedding model for project recommendations)
 
 **Frontend**
 
@@ -45,22 +47,42 @@ The app supports several user roles (client, freelancer, expert and admin), each
 - `Licenta.sql` - SQL script that populates the database
 - `FreelancerApp.sln` - Visual Studio solution linking the client and the server
 
+## Prerequisites
+
+- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- [Node.js](https://nodejs.org) (LTS) and npm
+- [PostgreSQL](https://www.postgresql.org/download/)
+- [Ollama](https://ollama.com)
+- A PayPal developer (sandbox) account
+
 ## Getting Started
 
 1. Create an empty PostgreSQL database named `Licenta`.
 2. Run the `Licenta.sql` script to populate it with the required data.
-3. In `FreelancerApp.Server/appsettings.json`, update the database connection string, the PayPal credentials and the API key for the embedding model.
-4. Start the backend:
+3. Install Ollama and pull the embedding model:
+
+```
+   ollama pull nomic-embed-text
+```
+
+Ollama runs on `http://localhost:11434` by default. 4. Configure the server:
+
+- Copy `FreelancerApp.Server/.env.example` to `FreelancerApp.Server/.env` and fill in your values (database connection, PayPal credentials, JWT secret).
+- If you use a different Ollama URL or model, update it in the same place.
+
+5. Start the backend:
 
 ```
    cd FreelancerApp.Server
    dotnet run
 ```
 
-5. Start the frontend:
+6. Start the frontend:
 
 ```
    cd FreelancerApp.Client
    npm install
    npm run dev
 ```
+
+7. Open `http://localhost:5173` in your browser.
