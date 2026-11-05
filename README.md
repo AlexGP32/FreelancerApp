@@ -61,21 +61,30 @@ The app supports several user roles (client, freelancer, expert and admin), each
 2. Run the `Licenta.sql` script to populate it with the required data.
 3. Install Ollama and pull the embedding model:
 
-```
-   ollama pull nomic-embed-text
-```
+    ```
+    ollama pull nomic-embed-text
+    ```
 
-Ollama runs on `http://localhost:11434` by default. 4. Configure the server:
+    Ollama runs on `http://localhost:11434` by default.
 
-- Copy `FreelancerApp.Server/.env.example` to `FreelancerApp.Server/.env` and fill in your values (database connection, PayPal credentials, JWT secret).
-- If you use a different Ollama URL or model, update it in the same place.
+4. Configure the server. Copy `FreelancerApp.Server/.env.example` to `FreelancerApp.Server/.env` and fill in your values:
+
+    | Variable               | Description                                    |
+    | ---------------------- | ---------------------------------------------- |
+    | `DB_CONNECTION`        | PostgreSQL connection string                   |
+    | `JWT_SECRET`           | Long random string used to sign tokens         |
+    | `PAYPAL_CLIENT_ID`     | PayPal sandbox client ID                       |
+    | `PAYPAL_CLIENT_SECRET` | PayPal sandbox secret                          |
+    | `OLLAMA_URL`           | Optional, defaults to `http://localhost:11434` |
+
+    The `.env` file is ignored by Git, so your secrets are never committed.
 
 5. Start the backend:
 
-```
-   cd FreelancerApp.Server
-   dotnet run
-```
+    ```
+    cd FreelancerApp.Server
+    dotnet run
+    ```
 
 6. Start the frontend:
 
