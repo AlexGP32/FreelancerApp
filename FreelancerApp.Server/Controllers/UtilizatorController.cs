@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using FreelancerApp.Server.Models;
-using Microsoft.EntityFrameworkCore;
 using System.Net;
 using Npgsql;
 using System.Data;

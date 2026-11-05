@@ -1,5 +1,4 @@
 using FreelancerApp.Server.Models;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using QuestPDF.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
